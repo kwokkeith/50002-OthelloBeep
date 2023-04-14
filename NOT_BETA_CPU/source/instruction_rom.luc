@@ -5,7 +5,6 @@ module instruction_rom #(
     output out[32]
   ) {
   
-   // Driver code, BR(reset) is the first instruction
   const INSTRUCTIONS = {
 32h77ffff6e,
 32ha6658000,
