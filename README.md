@@ -1,2 +1,2 @@
 # 50002-OthelloBeep
-Contains a custom designed CPU (named "NOT BETA CPU") with its own instruction set assembled in lucid on an Alchitry FPGA and an assembly script to run a modified version of Othello/Reversi.
+Contains a custom designed CPU (named "NOT BETA CPU") assembled in lucid on an Alchitry FPGA. A modified Othello game that makes use of the custom instruction sets for this CPU and a written assembly script to execute. This project includes timing based logic, Othello/Reversi game logic, bit-banging of led matrix and buzzers, and an emulator created in python to emulate the custom CPU's assembly script.
