@@ -1,0 +1,95 @@
+module output_handler (
+    input rst,
+    input clk,              // 100MHz clock
+    input grid[4][64],       // grids of Player, Valid and Current selected
+    input current_player[2],  // b01 is player 1, b10 is player 2
+    output outled,           // to LED strip, Br pin C49, connect LED Strip to 5V for power
+    output current_player_LED_sig[2], // signal required to light up led for current player
+    input valid_led_on,      // Signal to turn on valid grid
+    input buzzer_on,         // Signal to turn on buzzer
+    output buzzer_output     // To send signal out to external buzzer   
+  ) {
+    
+  // hFF0000, h00FF00, h0000FF, blue for the third LED, 
+  // red for the second LED, green for the first LED (nearest to the connector)
+  
+  ws2812b_writer led_strip(#PIXEL_COUNT(64), .clk(clk), .rst(rst)); //set for 64 pixels
+  
+  buzzer buzzer_system(.clk(clk), .rst(rst));  // buzzer module
+  fsm current_player_storage(.clk(clk), .rst(rst)) = {PLAYER1, PLAYER2}; // To store current_player data
+  
+  always {
+   led_strip.update=1; 
+    
+    //sample write 
+//   grid[0] = 64h000F000000000000;
+//   grid[1] = 64h00F0000000000000;
+//   grid[2] = 64h000000F000000000;
+//   grid[3] = 64h0000001000000000; 
+    
+    
+    // To handle LED
+    led_strip.color= 24h000000; 
+
+    
+    // PLAYER 1
+    if (grid[0][led_strip.pixel] == b1){
+      led_strip.color = h000010; // GREEN: h000011
+    }
+    
+    // PLAYER 2 
+    if (grid[1][led_strip.pixel] == b1){
+      led_strip.color = h300000;  // BLUE: h110000
+    }
+    
+    // VALID GRID
+    if (grid[2][led_strip.pixel] == b1){
+        if (valid_led_on){    // Signal to turn on valid grid led
+           led_strip.color = h101000; // PURPLE: h111100
+        
+        }
+        // Check if currently selected grid is HIGH
+        if (grid[3][led_strip.pixel] == b1){
+          led_strip.color = h100100; // RED: h001100
+        }
+    }
+    
+    current_player_LED_sig = b0;
+    
+    //  Buzzer connections
+    buzzer_output = buzzer_system.out;   // Connect to external output of buzzer
+    buzzer_system.trigger_sig = b0;      // Default switch off buzzer
+    
+    // To handle current player output
+    if(current_player == b01) // Player 1
+    {   
+       current_player_storage.d = current_player_storage.PLAYER1;
+       current_player_LED_sig = b01;   // green port for rgb led
+      
+       if (current_player_storage.q == current_player_storage.PLAYER2){  // To trigger buzzer when player change
+           current_player_storage.d = current_player_storage.PLAYER1;
+           
+          // Activate buzzer only when it is enabled
+           if (buzzer_on){
+             buzzer_system.trigger_sig = b1;
+            }
+      } 
+    }
+    else if (current_player == b10) // Player 2
+    {
+       current_player_storage.d = current_player_storage.PLAYER2;
+       current_player_LED_sig = b10;   // blue port for rgb led
+  
+       if (current_player_storage.q == current_player_storage.PLAYER1){  // To trigger buzzer when player change
+           current_player_storage.d = current_player_storage.PLAYER2;
+           
+          // Activate buzzer only when it is enabled
+           if (buzzer_on){
+             buzzer_system.trigger_sig = b1;
+            }
+        } 
+    }
+    outled=led_strip.led;
+  
+  }
+}

@@ -1,0 +1,22 @@
+module player_button_handler (
+    input player_button[5],  // player button inputs
+    output out[3]
+  ) {
+
+  always {
+    // hardwire buttons to R5
+    case (player_button){
+      b00001:
+        out = b001;
+      b00010:  // Right
+        out = b010;
+      b00100:
+        out = b011;
+      b01000:
+        out = b100;
+      b10000:
+        out = b101;
+      default:
+        out = b000;
+  }
+}

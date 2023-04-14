@@ -1,0 +1,39 @@
+module buzzer (
+    input clk,          // clock
+    input rst,          // reset
+    input trigger_sig,  // To start beeping sequence
+    output out
+  ) {
+  pwm pwm_system(#TOP(244), #DIV(8), #WIDTH(8), .clk(clk), .rst(rst));
+
+  .clk(clk){
+    .rst(rst){
+       dff hold_ctr[27];  // To hold for ~ 1 sec
+       fsm state = {IDLE, SEND_SIG};
+    }
+  }
+  always {
+    out = b0;
+    
+    pwm_system.value = d100;
+    pwm_system.update = b0;
+    
+    if (state.q == state.IDLE) {  // Module idling
+        if (trigger_sig == b1) {  // Signal to start buzzer
+            state.d = state.SEND_SIG;
+            hold_ctr.d = b0;
+            pwm_system.update = b0;
+         }
+    }
+    if (state.q == state.SEND_SIG)  // Sending signal
+    {   
+        pwm_system.update = b1;
+        out = pwm_system.pulse;     
+        hold_ctr.d = hold_ctr.q + 1;
+        
+        if (hold_ctr.q >= 100000000){
+           state.d = state.IDLE;
+         }
+    }
+ }
+}

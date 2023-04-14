@@ -1,0 +1,641 @@
+module alu_tester (
+    input clk,              // clock
+    input next_state,       // next_state signal
+    input next_stage,       // next_stage signal
+    input next_setstate,    // next_set stage signal (Moves to next set of test protocols)
+    
+    // For ALU Circuit
+    output out_a[16],       // input A for alu circuit
+    output out_b[16],       // input B for alu circuit 
+    output out_alufn[6],    // output for alu circuit
+    
+    // For Correct Values
+    output out[16],         // correct output to compare against
+    output out_zvn[3],      // correct output of zvn
+    // For protocol title
+    output current_state[16] // to output current state for protocol title
+  ) {
+  sig input_for_alu[38];    // c{a[16], b[16], alufn}
+  sig correct_output[19];   // c{correct_out[16], zvn[3]}
+  
+  .clk(clk){
+    // fsm for different Test type
+    fsm test_state = 
+    {AA, AB, AC, AD, AE, AF, AG, AH, AI, AJ, AK, AL,
+     SA, SB, SC, SD, SE, SF, SG, SH, SI, SJ, SK, SL,
+     CA, CB, CC, CD, CE, CF, CG, CH, CI, CJ, CK, CL, CM, CN, CO, CP, CQ, CR, CS, CT, CU, CV, CW, CX,
+     CY, CZ, CAA, CAB, CAC, CAD, CAE, CAF, CAG, CAH, CAI, CAJ, CAK, CAL, CAM, CAN, CAO, CAP, CAQ,
+     CAR, CAS,
+     MA, MB,
+     DA, DB, DC,
+     SHA, SHB, SHC, SHD, SHE, SHF,
+     BA, BB, BC, BD, BE, BF, BG, BH, BI, BJ, BK };
+
+    fsm test_state_set = 
+    {A, S, C, M, D, SH, B};
+    // fsm for different outputs for a particular test type
+    fsm stages_current_state = 
+    { PROTOCOL, TEST };
+    
+  }
+  
+  always {
+    
+    if (next_state) {
+      // if advance to next state, set stage to protocol to show title
+      stages_current_state.d = stages_current_state.PROTOCOL; 
+      
+      // To map next state to current state
+      case (test_state_set.q){
+      test_state_set.A: // ADDITION CASES
+        case (test_state.q) {
+          test_state.AA: test_state.d = test_state.AB;    // advance to next state (next test protocol for this set of states [test_state_set.A])
+          test_state.AB: test_state.d = test_state.AC;
+          test_state.AC: test_state.d = test_state.AD;
+          test_state.AD: test_state.d = test_state.AE;
+          test_state.AE: test_state.d = test_state.AF;
+          test_state.AF: test_state.d = test_state.AG;
+          test_state.AG: test_state.d = test_state.AH;
+          test_state.AH: test_state.d = test_state.AI;
+          test_state.AI: test_state.d = test_state.AJ;
+          test_state.AJ: test_state.d = test_state.AK;
+          test_state.AK: test_state.d = test_state.AL;
+          test_state.AL: test_state.d = test_state.AA;    // Loop back to initial state for this set of states
+          }
+        
+      test_state_set.S: // SUBTRACTION CASES
+        case (test_state.q) {  
+          test_state.SA: test_state.d = test_state.SB;
+          test_state.SB: test_state.d = test_state.SC;
+          test_state.SC: test_state.d = test_state.SD;
+          test_state.SD: test_state.d = test_state.SE;
+          test_state.SE: test_state.d = test_state.SF;
+          test_state.SF: test_state.d = test_state.SG;
+          test_state.SG: test_state.d = test_state.SH;
+          test_state.SH: test_state.d = test_state.SI;
+          test_state.SI: test_state.d = test_state.SJ;
+          test_state.SJ: test_state.d = test_state.SK;
+          test_state.SK: test_state.d = test_state.SL;
+          test_state.SL: test_state.d = test_state.SA;
+          }
+
+      test_state_set.C: // COMPARISON CASES
+        case (test_state.q) {  
+          test_state.CA: test_state.d = test_state.CB;
+          test_state.CB: test_state.d = test_state.CC;
+          test_state.CC: test_state.d = test_state.CD;
+          test_state.CD: test_state.d = test_state.CE;
+          test_state.CE: test_state.d = test_state.CF;
+          test_state.CF: test_state.d = test_state.CG;
+          test_state.CG: test_state.d = test_state.CH;
+          test_state.CH: test_state.d = test_state.CI;
+          test_state.CI: test_state.d = test_state.CJ;
+          test_state.CJ: test_state.d = test_state.CK;
+          test_state.CK: test_state.d = test_state.CL;
+          test_state.CL: test_state.d = test_state.CM;
+          test_state.CM: test_state.d = test_state.CN;
+          test_state.CN: test_state.d = test_state.CO;
+          test_state.CO: test_state.d = test_state.CP;
+          test_state.CP: test_state.d = test_state.CQ;
+          test_state.CQ: test_state.d = test_state.CR;
+          test_state.CR: test_state.d = test_state.CS;
+          test_state.CS: test_state.d = test_state.CT;
+          test_state.CT: test_state.d = test_state.CU;
+          test_state.CU: test_state.d = test_state.CV;
+          test_state.CV: test_state.d = test_state.CW;
+          test_state.CW: test_state.d = test_state.CX;
+          test_state.CX: test_state.d = test_state.CY;
+          test_state.CY: test_state.d = test_state.CZ;
+          test_state.CZ: test_state.d = test_state.CAA;
+          test_state.CAA: test_state.d = test_state.CAB;
+          test_state.CAB: test_state.d = test_state.CAC;
+          test_state.CAC: test_state.d = test_state.CAD;
+          test_state.CAD: test_state.d = test_state.CAE;
+          test_state.CAE: test_state.d = test_state.CAF;
+          test_state.CAF: test_state.d = test_state.CAG;
+          test_state.CAG: test_state.d = test_state.CAH;
+          test_state.CAH: test_state.d = test_state.CAI;
+          test_state.CAI: test_state.d = test_state.CAJ;
+          test_state.CAJ: test_state.d = test_state.CAK;
+          test_state.CAK: test_state.d = test_state.CAL;
+          test_state.CAL: test_state.d = test_state.CAM;
+          test_state.CAM: test_state.d = test_state.CAN;
+          test_state.CAN: test_state.d = test_state.CAO;
+          test_state.CAO: test_state.d = test_state.CAP;
+          test_state.CAP: test_state.d = test_state.CAQ;
+          test_state.CAQ: test_state.d = test_state.CAR;
+          test_state.CAR: test_state.d = test_state.CAS;
+          test_state.CAS: test_state.d = test_state.CA;
+          }
+        
+      test_state_set.M: // MULTIPLY CASES
+        case (test_state.q) {  
+          test_state.MA: test_state.d = test_state.MB;
+          test_state.MB: test_state.d = test_state.MA;
+          }
+          
+      test_state_set.D:  // DIVISION CASES
+        case (test_state.q) {   
+          test_state.DA: test_state.d = test_state.DB;
+          test_state.DB: test_state.d = test_state.DC;
+          test_state.DC: test_state.d = test_state.DA;
+          }
+          
+      test_state_set.SH:  // SHIFTING CASES
+        case (test_state.q) {   
+          test_state.SHA: test_state.d = test_state.SHB;
+          test_state.SHB: test_state.d = test_state.SHC;
+          test_state.SHC: test_state.d = test_state.SHD;
+          test_state.SHD: test_state.d = test_state.SHE;
+          test_state.SHE: test_state.d = test_state.SHF;
+          test_state.SHF: test_state.d = test_state.SHA;
+          }
+             
+      test_state_set.B:  // BOOLEAN CASES
+        case (test_state.q) {   
+          test_state.BA: test_state.d = test_state.BB;
+          test_state.BB: test_state.d = test_state.BC;
+          test_state.BC: test_state.d = test_state.BD;
+          test_state.BD: test_state.d = test_state.BE;
+          test_state.BE: test_state.d = test_state.BF;
+          test_state.BF: test_state.d = test_state.BG;
+          test_state.BG: test_state.d = test_state.BH;
+          test_state.BH: test_state.d = test_state.BI;
+          test_state.BI: test_state.d = test_state.BJ;
+          test_state.BJ: test_state.d = test_state.BK;
+          test_state.BK: test_state.d = test_state.BA;  
+          }
+      }
+    }
+  
+    
+    // if next_setstate button is pressed, advance to next set of protocols
+    if (next_setstate) {
+      // if advance to next set state, set stage to protocol to show title
+      stages_current_state.d = stages_current_state.PROTOCOL; 
+      case(test_state_set.q){
+        test_state_set.A: test_state_set.d = test_state_set.S;    // change set state
+                          test_state.d = test_state.SA;           // change state
+        test_state_set.S: test_state_set.d = test_state_set.C;
+                          test_state.d = test_state.CA;
+        test_state_set.C: test_state_set.d = test_state_set.M;
+                          test_state.d = test_state.MA;
+        test_state_set.M: test_state_set.d = test_state_set.D;
+                          test_state.d = test_state.DA;
+        test_state_set.D: test_state_set.d = test_state_set.SH;
+                          test_state.d = test_state.SHA;
+        test_state_set.SH: test_state_set.d = test_state_set.B;
+                           test_state.d = test_state.BA;
+        test_state_set.B: test_state_set.d = test_state_set.A;
+                           test_state.d = test_state.AA;
+        }
+    }
+    
+    // if next_stage button is pressed to advance stage to test
+    if (next_stage) {
+      case(stages_current_state.q){
+        stages_current_state.PROTOCOL: stages_current_state.d = stages_current_state.TEST;  // Advance to next stage
+        stages_current_state.TEST: stages_current_state.d = stages_current_state.PROTOCOL;  // Title of Protocol --> Test
+      }
+    }
+    
+    // To map current state to its protocol number (label)
+    case (stages_current_state.q){
+      stages_current_state.PROTOCOL:  
+        input_for_alu = b0;
+        
+        case (test_state.q){
+          test_state.AA: current_state = 0101;    // At test_state.AA and PROTOCOL state, 7-segment display will show "0101".
+          test_state.AB: current_state = 0102;
+          test_state.AC: current_state = 0103;
+          test_state.AD: current_state = 0104;
+          test_state.AE: current_state = 0105;
+          test_state.AF: current_state = 0106;
+          test_state.AG: current_state = 0107;
+          test_state.AH: current_state = 0108;
+          test_state.AI: current_state = 0109;
+          test_state.AJ: current_state = 0110;
+          test_state.AK: current_state = 0111;
+          test_state.AL: current_state = 0112;
+        
+          test_state.SA: current_state = 0201;
+          test_state.SB: current_state = 0202;  
+          test_state.SC: current_state = 0203;
+          test_state.SD: current_state = 0204;
+          test_state.SE: current_state = 0205;
+          test_state.SF: current_state = 0206;
+          test_state.SG: current_state = 0207;
+          test_state.SH: current_state = 0208;
+          test_state.SI: current_state = 0209;
+          test_state.SJ: current_state = 0210;
+          test_state.SK: current_state = 0211;
+          test_state.SL: current_state = 0212;
+          
+          test_state.CA: current_state = 0301;
+          test_state.CB: current_state = 0302;
+          test_state.CC: current_state = 0303;
+          test_state.CD: current_state = 0304;
+          test_state.CE: current_state = 0305;
+          test_state.CF: current_state = 0306;
+          test_state.CG: current_state = 0307;
+          test_state.CH: current_state = 0308;
+          test_state.CI: current_state = 0309;
+          test_state.CJ: current_state = 0310;
+          test_state.CK: current_state = 0311;
+          test_state.CL: current_state = 0312;
+          test_state.CM: current_state = 0313;
+          test_state.CN: current_state = 0314;
+          test_state.CO: current_state = 0315;
+          test_state.CP: current_state = 0316;
+          test_state.CQ: current_state = 0317;
+          test_state.CR: current_state = 0318;
+          test_state.CS: current_state = 0319;
+          test_state.CT: current_state = 0320;
+          test_state.CU: current_state = 0321;
+          test_state.CV: current_state = 0322;
+          test_state.CW: current_state = 0323;
+          test_state.CX: current_state = 0324;
+          test_state.CY: current_state = 0325;
+          test_state.CZ: current_state = 0326;
+          test_state.CAA: current_state = 0327;
+          test_state.CAB: current_state = 0328;
+          test_state.CAC: current_state = 0329;
+          test_state.CAD: current_state = 0330;
+          test_state.CAE: current_state = 0331;
+          test_state.CAF: current_state = 0332;
+          test_state.CAG: current_state = 0333;
+          test_state.CAH: current_state = 0334;
+          test_state.CAI: current_state = 0335;
+          test_state.CAJ: current_state = 0336;
+          test_state.CAK: current_state = 0337;
+          test_state.CAL: current_state = 0338;
+          test_state.CAM: current_state = 0339;
+          test_state.CAN: current_state = 0340;
+          test_state.CAO: current_state = 0341;
+          test_state.CAP: current_state = 0342;
+          test_state.CAQ: current_state = 0343;
+          test_state.CAR: current_state = 0344;
+          test_state.CAS: current_state = 0345;
+          
+          test_state.MA: current_state = 0401;
+          test_state.MB: current_state = 0402;
+           
+          test_state.DA: current_state = 0501;
+          test_state.DB: current_state = 0502;
+          test_state.DC: current_state = 0503;
+          
+          test_state.SHA: current_state = 0601;
+          test_state.SHB: current_state = 0602;
+          test_state.SHC: current_state = 0603;  
+          test_state.SHD: current_state = 0604;
+          test_state.SHE: current_state = 0605;
+          test_state.SHF: current_state = 0606;
+          
+          test_state.BA: current_state = 0701;
+          test_state.BB: current_state = 0702;
+          test_state.BC: current_state = 0703;
+          test_state.BD: current_state = 0704;
+          test_state.BE: current_state = 0705;
+          test_state.BF: current_state = 0706;
+          test_state.BG: current_state = 0707;
+          test_state.BH: current_state = 0708;
+          test_state.BI: current_state = 0709;
+          test_state.BJ: current_state = 0710;
+          test_state.BK: current_state = 0711;  
+          
+          default: current_state = 8888;
+        }
+        
+      stages_current_state.TEST:
+        case (test_state.q) {
+          // *************************
+          // ***** Addition Case *****
+          // *************************
+          test_state.AA: 
+            input_for_alu = c{16h0, 16h0, 6b0};        // 0 + 0 = 0
+            correct_output = c{16h0, 1, 0, 0};         // out = 0, zvn = 100
+          test_state.AB: 
+            input_for_alu = c{16h7FFF, 16h0, 6b0};     // x + 0 = x
+            correct_output = c{16h7FFF, 0, 0, 0};      // out = x, zvn = 000
+          test_state.AC:
+            input_for_alu = c{16h0, 16h7FFF, 6b0};     // 0 + x = x 
+            correct_output = c{16h7FFF, 0, 0, 0};      // out = x, zvn = 000
+          test_state.AD:
+            input_for_alu = c{16hFFFF, 16h0, 6b0};     // (-x) + 0 = (-x) 
+            correct_output = c{16hFFFF, 0, 0, 1};      // out = -x, zvn = 001
+          test_state.AE:
+            input_for_alu = c{16h0, 16hFFFF, 6b0};     // 0 + (-x) = (-x) 
+            correct_output = c{16hFFFF, 0, 0, 1};      // out = (-x), zvn = 001              
+          test_state.AF:
+            input_for_alu = c{16h1234, 16h4567, 6b0};  // 0x1234 + 0x4567 = 0x579B 
+            correct_output = c{16h579B, 0, 0, 0};      // out = 0x579B, zvn = 000
+          test_state.AG:
+            input_for_alu = c{16hF801, 16hF820, 6b0};  // 0xF801 + 0xF820 = 0xF021 
+            correct_output = c{16hF021, 0, 0, 1};      // out = 0xF021, zvn = 001    
+          test_state.AH:
+            input_for_alu = c{16hDE00, 16h00AD, 6b0};  // 0xDE00 (-ve) + 0x00AD (+ve) = 0xDEAD 
+            correct_output = c{16hDEAD, 0, 0, 1};      // out = 0xDEAD, zvn = 001        
+          test_state.AI:
+            input_for_alu = c{16h00EF, 16hBE00, 6b0};  // 0x00EF (+ve) + 0xBE00 (-ve) = 0xBEEF 
+            correct_output = c{16hBEEF, 0, 0, 1};      // out = 0xBEEF, zvn = 001
+          test_state.AJ:
+            input_for_alu = c{16hFFFF, 16hFFFF, 6b0};  // 0xFFFF + 0xFFFF = 0xFFFE 
+            correct_output = c{16hFFFE, 0, 0, 1};      // out = 0xFFFE, zvn = 001
+          test_state.AK:
+            input_for_alu = c{16h7000, 16h7000, 6b0};  // Positive Overflow 
+            correct_output = c{16hE000, 0, 1, 1};      // out = 0xE000, zvn = 011
+          test_state.AL:
+            input_for_alu = c{16hBFFF, 16h8001, 6b0};  // Negative Overflow 
+            correct_output = c{16h4000, 0, 1, 0};      // out = 0x4000, zvn = 010        
+          
+          // ****************************
+          // ***** Subtraction Case *****
+          // ****************************
+          test_state.SA: 
+            input_for_alu = c{ 16h0, 16h0, 6b1 };      // 0 - 0 = 0
+            correct_output = c{ 16h0, 1, 0, 0 };       // out = 0, zvn = 100
+          test_state.SB: 
+            input_for_alu = c{16h7FFF, 16h0, 6b1};     // x - 0 = x
+            correct_output = c{16h7FFF, 0, 0, 0};      // out = x, zvn = 000
+          test_state.SC:
+            input_for_alu = c{16h0, 16h7FFF, 6b1};     // 0 - x = (-x) 
+            correct_output = c{16h8001, 0, 0, 1};      // out = (-x), zvn = 001
+          test_state.SD:
+            input_for_alu = c{16hFFFF, 16h0, 6b1};     // (-x) - 0 = (-x) 
+            correct_output = c{16hFFFF, 0, 0, 1};      // out = -x, zvn = 001
+          test_state.SE:
+            input_for_alu = c{16h0, 16hFFFF, 6b1};     // 0 - (-x) = x 
+            correct_output = c{16h0001, 0, 0, 0};      // out = x, zvn = 000              
+          test_state.SF:
+            input_for_alu = c{16hFFFF, 16hBFFF, 6b1};  // 0xFFFF - 0xBFFF = 0x4000 
+            correct_output = c{16h4000, 0, 0, 0};      // out = 0x4000, zvn = 000
+          test_state.SG:
+            input_for_alu = c{16h7654, 16h5432, 6b1};  // 0x7654 - 0x5432 = 0x2222 (a - b)
+            correct_output = c{16h2222, 0, 0, 0};      // out = 0x2222, zvn = 000 | a > b > 0  
+          test_state.SH:
+            input_for_alu = c{16h5432, 16h7654, 6b1};  // 0x5432 - 0x7654 = 0xDDDE (a - b)
+            correct_output = c{16hDDDE, 0, 0, 1};      // out = 0xDDDE, zvn = 001  | b > a > 0       
+          test_state.SI:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b1};  // 0xEDCB - 0xDCBA = 0x1111 (a - b)
+            correct_output = c{16h1111, 0, 0, 0};      // out = 0x1111, zvn = 000 | 0 > a > b
+          test_state.SJ:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b1};  // 0xDCBA + 0xEDCB = 0xEEEF (a - b)
+            correct_output = c{16hEEEF, 0, 0, 1};      // out = 0xEEEF, zvn = 001 | 0 > b > a
+          test_state.SK:
+            input_for_alu = c{16h7FFF, 16h8000, 6b1};  // 0x7FFF - 0x8000 = 0xFFFF (a - b)
+            correct_output = c{16hFFFF, 0, 1, 1};      // out = 0xFFFF, zvn = 011 | a > 0 > b
+          test_state.SL:
+            input_for_alu = c{16h8000, 16h7FFF, 6b1};  // 0x8000 - 0x7FFF = 0x0001 (a - b)
+            correct_output = c{16h0001, 0, 1, 0};      // out = 0x0001, zvn = 010 | b > 0 > a          
+          
+          // ****************************
+          // ****** Multiply Case *******
+          // ****************************   
+          test_state.MA: 
+            input_for_alu = c{16h0004, 16hFFFE, 6b000010}; // (0x0004 * 0xFFFE) = 0xFFF8
+            correct_output = c{16hFFF8, 0, 0, 0};          // out = 0xFFF8, zvn = 000             
+          test_state.MB: 
+            input_for_alu = c{16h0004, 16h0004, 6b000010}; // (0x0004 * 0x0004) = 0x0010
+            correct_output = c{16h0010, 0, 0, 0};          // out = 0x0010, zvn = 000     
+            
+          // *******************************************
+          // ****** Divide by 3 (Estimated) Case *******
+          // *******************************************
+          test_state.DA: 
+            input_for_alu = c{16h000C, 16h0, 6b000100};    // (0x000C / 3) + 0x0 = est: 0x0004 
+            correct_output = c{16h0004, 0, 0, 0};          // out = 0x0004, zvn = 000             
+          test_state.DB: 
+            input_for_alu = c{16h001A, 16h0, 6b000100};    // (0x001A / 3) + 0x0 = est: 0x0009
+            correct_output = c{16h0009, 0, 0, 0};          // out = 0x0009, zvn = 000 
+          test_state.DC: 
+            input_for_alu = c{16h000C, 16h0FF0, 6b000100};    // (0x000C / 3) + 0x0FF0 = est: 0x0FF4 
+            correct_output = c{16h0FF4, 0, 0, 0};          // out = 0x0FF4, zvn = 000        
+          
+          // ****************************************
+          // ************ Shifting Case *************
+          // ****************************************   
+          test_state.SHA:
+            input_for_alu = c{16h000F, 16h00F0, 6b100000}; // 0x000F << 0x00F0 = 0x0    
+            correct_output = c{16h0000, 0, 0, 0};          // out = 0x0000, zvn = 000
+          test_state.SHB:
+            input_for_alu = c{16h000F, 16h0005, 6b100000}; // 0x000F << 0x0005 = 0x01E0    
+            correct_output = c{16h01E0, 0, 0, 0};          // out = 0x01E0, zvn = 000  
+          test_state.SHC:
+            input_for_alu = c{16hF000, 16h00F0, 6b100001}; // 0xF000 >> 0x00F0 = 0x0    
+            correct_output = c{16h0000, 0, 0, 1};          // out = 0x0000, zvn = 001 
+          test_state.SHD:
+            input_for_alu = c{16hF000, 16h0005, 6b100001}; // 0xF000 >> 0x0005 = 0x0780    
+            correct_output = c{16h0780, 0, 0, 1};          // out = 0x0780, zvn = 001 
+          test_state.SHE:
+            input_for_alu = c{16hF000, 16h00F0, 6b100011}; // 0xF000 >>> 0x00F0 = 0xFFFF    
+            correct_output = c{16hFFFF, 0, 0, 1};          // out = 0xFFFF, zvn = 001
+          test_state.SHF:
+            input_for_alu = c{16hF000, 16h0005, 6b100011}; // 0xF000 >>> 0x00F0 = 0xFF80    
+            correct_output = c{16hFF80, 0, 0, 1};          // out = 0xFF80, zvn = 001     
+            
+                 
+          // ****************************
+          // ***** Comparison Case ******
+          // ****************************
+          
+          // a > b > 0
+          test_state.CA: 
+            input_for_alu = c{16h7654, 16h5432, 6b110011}; // (0x7654 == 0x5432) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | a > b > 0  
+          test_state.CB:
+            input_for_alu = c{16h7654, 16h5432, 6b110101}; // (0x7654 < 0x5432) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | a > b > 0      
+          test_state.CC:
+            input_for_alu = c{16h7654, 16h5432, 6b110111}; // (0x7654 <= 0x5432) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | a > b > 0 
+          test_state.CD:
+            input_for_alu = c{16h7654, 16h5432, 6b111101}; // (0x7654 > 0x5432) = b1
+            correct_output = c{16h1, 0, 0, 0};             // out = 0x1, zvn = 000 | a > b > 0 
+          test_state.CE:
+            input_for_alu = c{16h7654, 16h5432, 6b111111}; // (0x7654 >= 0x5432) = b1
+            correct_output = c{16h1, 0, 0, 0};             // out = 0x1, zvn = 000 | a > b > 0 
+         
+          // b > a > 0
+          test_state.CF:
+            input_for_alu = c{16h5432, 16h7654, 6b110011}; // (0x5432 == 0x7654) = b0 
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001  | b > a > 0  
+          test_state.CG:
+            input_for_alu = c{16h5432, 16h7654, 6b110101}; // (0x5432 < 0x7654) = b1
+            correct_output = c{16h1, 0, 0, 1};             // out = 0x1, zvn = 001  | b > a > 0 
+          test_state.CH:
+            input_for_alu = c{16h5432, 16h7654, 6b110111}; // (0x5432 <= 0x7654) = b1 
+            correct_output = c{16h1, 0, 0, 1};             // out = 0x1, zvn = 001  | b > a > 0               
+          test_state.CI:
+            input_for_alu = c{16h5432, 16h7654, 6b111101}; // (0x5432 > 0x7654) = b0 
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001  | b > a > 0           
+          test_state.CJ:
+            input_for_alu = c{16h5432, 16h7654, 6b111111}; // (0x5432 >= 0x7654) = b0 
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001  | b > a > 0           
+          
+          // 0 > a > b
+          test_state.CK:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b110011}; // (0xEDCB == 0xDCBA) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | 0 > a > b
+          test_state.CL:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b110101}; // (0xEDCB < 0xDCBA) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | 0 > a > b
+          test_state.CM:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b110111}; // (0xEDCB <= 0xDCBA) = b0
+            correct_output = c{16h0, 0, 0, 0};             // out = 0x0, zvn = 000 | 0 > a > b               
+          test_state.CN:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b111101}; // (0xEDCB > 0xDCBA) = b1
+            correct_output = c{16h1, 0, 0, 0};             // out = 0x1, zvn = 000 | 0 > a > b           
+          test_state.CO:
+            input_for_alu = c{16hEDCB, 16hDCBA, 6b111111}; // (0xEDCB >= 0xDCBA) = b1
+            correct_output = c{16h1, 0, 0, 0};             // out = 0x1, zvn = 000 | 0 > a > b                                         
+  
+          // 0 > b > a
+          test_state.CP:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b110011}; // (0xDCBA == 0xEDCB) = b0
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001 | 0 > b > a
+          test_state.CQ:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b110101}; // (0xDCBA < 0xEDCB) = b1
+            correct_output = c{16h1, 0, 0, 1};             // out = 0x1, zvn = 001 | 0 > b > a  
+          test_state.CR:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b110111}; // (0xDCBA <= 0xEDCB) = b1
+            correct_output = c{16h1, 0, 0, 1};             // out = 0x1, zvn = 001 | 0 > b > a             
+          test_state.CS:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b111101}; // (0xDCBA > 0xEDCB) = b0
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001 | 0 > b > a             
+          test_state.CT:
+            input_for_alu = c{16hDCBA, 16hEDCB, 6b111111}; // (0xDCBA >= 0xEDCB) = b0
+            correct_output = c{16h0, 0, 0, 1};             // out = 0x0, zvn = 001 | 0 > b > a    
+         
+          // a > 0 > b      
+          test_state.CU:
+            input_for_alu = c{16h7FFF, 16h8000, 6b110011}; // (0x7FFF == 0x8000) = b0
+            correct_output = c{16h0, 0, 1, 1};             // out = 0x0, zvn = 011 | a > 0 > b    
+          test_state.CV:
+            input_for_alu = c{16h7FFF, 16h8000, 6b110101}; // (0x7FFF < 0x8000) = b0
+            correct_output = c{16h0, 0, 1, 1};             // out = 0x0, zvn = 011 | a > 0 > b                
+          test_state.CW:
+            input_for_alu = c{16h7FFF, 16h8000, 6b110111}; // (0x7FFF <= 0x8000) = b0
+            correct_output = c{16h0, 0, 1, 1};             // out = 0x0, zvn = 011 | a > 0 > b 
+          test_state.CX:
+            input_for_alu = c{16h7FFF, 16h8000, 6b111101}; // (0x7FFF > 0x8000) = b1
+            correct_output = c{16h1, 0, 1, 1};             // out = 0x1, zvn = 011 | a > 0 > b         
+          test_state.CY:
+            input_for_alu = c{16h7FFF, 16h8000, 6b111111}; // (0x7FFF >= 0x8000) = b1
+            correct_output = c{16h1, 0, 1, 1};             // out = 0x1, zvn = 011 | a > 0 > b 
+         
+          // b > 0 > a  
+          test_state.CZ:
+            input_for_alu = c{16h8000, 16h7FFF, 6b110011}; // (0x8000 == 0x7FFF) = 0x0
+            correct_output = c{16h0, 0, 1, 0};             // out = 0x0, zvn = 010 | b > 0 > a            
+          test_state.CAA:
+            input_for_alu = c{16h8000, 16h7FFF, 6b110101}; // (0x8000 < 0x7FFF) = 0x1
+            correct_output = c{16h1, 0, 1, 0};             // out = 0x1, zvn = 0100 | b > 0 > a 
+          test_state.CAB:
+            input_for_alu = c{16h8000, 16h7FFF, 6b110111}; // (0x8000 <= 0x7FFF) = 0x1
+            correct_output = c{16h1, 0, 1, 0};             // out = 0x1, zvn = 010 | b > 0 > a             
+          test_state.CAC:
+            input_for_alu = c{16h8000, 16h7FFF, 6b111101}; // (0x8000 > 0x7FFF) = 0x0
+            correct_output = c{16h0, 0, 1, 0};             // out = 0x0, zvn = 010 | b > 0 > a             
+          test_state.CAD:
+            input_for_alu = c{16h8000, 16h7FFF, 6b111111}; // (0x8000 >= 0x7FFF) = 0x0
+            correct_output = c{16h0, 0, 1, 0};             // out = 0x0, zvn = 010 | b > 0 > a             
+         
+          // a = b = 0     
+          test_state.CAE:
+            input_for_alu = c{16h0, 16h0, 6b110011};       // (0x0 == 0x0) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a = b = 0            
+          test_state.CAF:
+            input_for_alu = c{16h0, 16h0, 6b110101};       // (0x0 < 0x0) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | a = b = 0
+          test_state.CAG:
+            input_for_alu = c{16h0, 16h0, 6b110111};       // (0x0 <= 0x0) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a = b = 0            
+          test_state.CAH:
+            input_for_alu = c{16h0, 16h0, 6b111101};       // (0x0 > 0x0) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | a = b = 0             
+          test_state.CAI:
+            input_for_alu = c{16h0, 16h0, 6b111111};       // (0x0 <= 0x0) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a = b = 0                                 
+         
+          // 0 < a, b
+          test_state.CAJ:
+            input_for_alu = c{16h7FFF, 16h7FFF, 6b110011}; // (0x7FFF == 0x7FFF) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | 0 < a, b              
+          test_state.CAK:
+            input_for_alu = c{16h7FFF, 16h7FFF, 6b110101}; // (0x7FFF > 0x7FFF) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | 0 < a, b             
+          test_state.CAL:
+            input_for_alu = c{16h7FFF, 16h7FFF, 6b110111}; // (0x7FFF >= 0x7FFF) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | 0 < a, b  
+          test_state.CAM:
+            input_for_alu = c{16h7FFF, 16h7FFF, 6b111101}; // (0x7FFF < 0x7FFF) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | 0 < a, b             
+          test_state.CAN:
+            input_for_alu = c{16h7FFF, 16h7FFF, 6b111111}; // (0x7FFF <= 0x7FFF) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | 0 < a, b             
+            
+          // a, b < 0
+          test_state.CAO:
+            input_for_alu = c{16hEDCB, 16hEDCB, 6b110011}; // (0xEDCB == 0xEDCB) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a, b < 0          
+          test_state.CAP:
+            input_for_alu = c{16hEDCB, 16hEDCB, 6b110101}; // (0xEDCB > 0xEDCB) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | a, b < 0               
+          test_state.CAQ:
+            input_for_alu = c{16hEDCB, 16hEDCB, 6b110111}; // (0xEDCB >= 0xEDCB) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a, b < 0     
+          test_state.CAR:
+            input_for_alu = c{16hEDCB, 16hEDCB, 6b111101}; // (0xEDCB < 0xEDCB) = 0x0
+            correct_output = c{16h0, 1, 0, 0};             // out = 0x0, zvn = 100 | a, b < 0                
+          test_state.CAS:
+            input_for_alu = c{16hEDCB, 16hEDCB, 6b111111}; // (0xEDCB <= 0xEDCB) = 0x1
+            correct_output = c{16h1, 1, 0, 0};             // out = 0x1, zvn = 100 | a, b < 0               
+          
+          // ****************************
+          // ****** BOOLEAN CASE ********
+          // ****************************   
+          test_state.BA:
+            input_for_alu = c{16hBEEF, 16hFEED, 6b011000}; // (0xBEEF & 0xFEED) = 0xBEED
+            correct_output = c{16hBEED, 0, 0, 1};          // out = 0xBEED, zvn = 001 | a & b  
+          test_state.BB:
+            input_for_alu = c{16hDEAD, 16hBEEF, 6b011000}; // (0xDEAD & 0xBEEF) = 0x9EAD
+            correct_output = c{16h9EAD, 0, 0, 1};          // out = 0x9EAD, zvn = 001 | a & b  
+          test_state.BC:
+            input_for_alu = c{16h00FF, 16h0FEF, 6b011000}; // (0x00FF & 0x0FEF) = 0x00EF
+            correct_output = c{16h00EF, 0, 0, 0};          // out = 0x00EF, zvn = 000 | a & b
+          test_state.BD:
+            input_for_alu = c{16hBEEF, 16hFEED, 6b011110}; // (0xBEEF | 0xFEED) = 0xFEEF
+            correct_output = c{16hFEEF, 0, 0, 1};          // out = 0xFEEF, zvn = 001 | a | b
+          test_state.BE:
+            input_for_alu = c{16hDEAD, 16hBEEF, 6b011110}; // (0xDEAD | 0xBEEF) = 0xFEEF
+            correct_output = c{16hFEEF, 0, 0, 1};          // out = 0xFEEF, zvn = 001 | a | b  
+          test_state.BF:
+            input_for_alu = c{16h00FF, 16h0FEF, 6b011110}; // (0x00FF | 0x0FEF) = 0x0FFF
+            correct_output = c{16h0FFF, 0, 0, 0};          // out = 0x0FFF, zvn = 000 | a | b
+          test_state.BG:
+            input_for_alu = c{16hBEEF, 16hFEED, 6b010110}; // (0xBEEF ^ 0xFEED) = 0x4002
+            correct_output = c{16h4002, 0, 0, 1};          // out = 0x4002, zvn = 000 | a ^ b
+          test_state.BH:
+            input_for_alu = c{16hDEAD, 16hBEEF, 6b010110}; // (0xDEAD ^ 0xBEEF) = 0x6042
+            correct_output = c{16h6042, 0, 0, 1};          // out = 0x6042, zvn = 001 | a ^ b
+          test_state.BI:
+            input_for_alu = c{16hDEAD, 16h3EED, 6b010110}; // (0xBEEF ^ 0x3EED) = 0xE040
+            correct_output = c{16hE040, 0, 0, 0};          // out = 0xE040, zvn = 000 | a ^ b  
+          test_state.BJ:
+            input_for_alu = c{16hDEAD, 16hBEED, 6b011010}; // LDR(A)
+            correct_output = c{16hDEAD, 0, 0, 1};          // out = 0xDEAD, zvn = 001 | LDR(A)  
+          test_state.BK:
+            input_for_alu = c{16h3EAD, 16hBEED, 6b011010}; // LDR(A)
+            correct_output = c{16h3EAD, 0, 0, 1};          // out = 0x3EAD, zvn = 000 | LDR(A)    
+                              
+          default:
+            input_for_alu = 37b0;
+            correct_output = 16b0; 
+        }          
+    }
+      out_a = input_for_alu[37:22];
+      out_b = input_for_alu[21:6];
+      out_alufn = input_for_alu[5:0];
+      out = correct_output[18:3];
+      out_zvn = correct_output[2:0];
+}

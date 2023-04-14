@@ -1,0 +1,22 @@
+No errors detected.
+Warnings in file C:\Users\Owner\Desktop\130423_1819\NOT_BETA_CPU\source\motherboard.luc:
+    Line 53, Column 21 : The signal "beta.ia[31:0]" is wider than "memory_unit.ia" and the most significant bits will be dropped
+Starting Vivado...
+
+****** Vivado v2022.2 (64-bit)
+  **** SW Build 3671981 on Fri Oct 14 05:00:03 MDT 2022
+  **** IP Build 3669848 on Fri Oct 14 08:30:02 MDT 2022
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+
+source {C:\Users\Owner\Desktop\130423_1819\NOT_BETA_CPU\work\project.tcl}
+# set projDir "C:/Users/Owner/Desktop/130423_1819/NOT_BETA_CPU/work/vivado"
+# set projName "NOT_BETA_CPU"
+# set topName top
+# set device xc7a35tftg256-1
+# if {[file exists "$projDir/$projName"]} { file delete -force "$projDir/$projName" }
+# create_project $projName "$projDir/$projName" -part $device
+
+Build aborted by user.
+Vivado exited.
+
+Bin file (C:\Users\Owner\Desktop\130423_1819\NOT_BETA_CPU\work\vivado\NOT_BETA_CPU\NOT_BETA_CPU.runs\impl_1\au_top_0.bin) could not be found! The build probably failed.

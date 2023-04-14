@@ -1,0 +1,84 @@
+module regfile_memory (
+    input clk,  // clock
+    input rst, // reset
+    input read_address_1[4],
+    input read_address_2[4],
+    output reg_data_1[64],
+    output reg_data_2[64],
+    input write_address[4],
+    input write_data[64],
+    input write_enable,
+    output grid[4][64],               // For output handler to handle each grid
+    output current_player[2],         // To indicate current player
+    output current_timer[8],          // To output currrent timer data
+    input debug_register_index[4],    // (debug) to pick register 
+    output debug_register_output[64]  // (debug) register output 
+  ) {
+  
+  dff registers[16][64](#INIT(16x{{64h0}}), .clk(clk), .rst(rst));
+  
+  always {
+  
+    // initial setups to silence output compilation errors
+    reg_data_1 = 0;
+    reg_data_2 = 0;
+
+    // always read 
+    reg_data_1 = registers.q[read_address_1];
+    reg_data_2 = registers.q[read_address_2];
+    
+    // check if write_en and its not R31 
+    if (write_address != b1111 && write_enable){
+        registers.d[write_address] = write_data;
+    }
+    
+    // always give out 0 if we are reading R31
+    if (read_address_1 == b1111) reg_data_1 = 64h0;
+    if (read_address_2 == b1111) reg_data_2 = 64h0;
+    
+    grid[0] = c{ registers.q[11][63:56], 
+    registers.q[11][48], registers.q[11][49], registers.q[11][50], registers.q[11][51], registers.q[11][52], registers.q[11][53], registers.q[11][54], registers.q[11][55], 
+    registers.q[11][47:40],
+    registers.q[11][32], registers.q[11][33], registers.q[11][34], registers.q[11][35], registers.q[11][36], registers.q[11][37], registers.q[11][38], registers.q[11][39], 
+    registers.q[11][31:24],
+    registers.q[11][16], registers.q[11][17], registers.q[11][18], registers.q[11][19], registers.q[11][20], registers.q[11][21], registers.q[11][22], registers.q[11][23], 
+    registers.q[11][15:8], 
+    registers.q[11][0], registers.q[11][1], registers.q[11][2], registers.q[11][3], registers.q[11][4], registers.q[11][5], registers.q[11][6], registers.q[11][7]};
+    
+    grid[1] = c{ registers.q[10][63:56], 
+    registers.q[10][48], registers.q[10][49], registers.q[10][50], registers.q[10][51], registers.q[10][52], registers.q[10][53], registers.q[10][54], registers.q[10][55], 
+    registers.q[10][47:40],
+    registers.q[10][32], registers.q[10][33], registers.q[10][34], registers.q[10][35], registers.q[10][36], registers.q[10][37], registers.q[10][38], registers.q[10][39], 
+    registers.q[10][31:24],
+    registers.q[10][16], registers.q[10][17], registers.q[10][18], registers.q[10][19], registers.q[10][20], registers.q[10][21], registers.q[10][22], registers.q[10][23], 
+    registers.q[10][15:8], 
+    registers.q[10][0], registers.q[10][1], registers.q[10][2], registers.q[10][3], registers.q[10][4], registers.q[10][5], registers.q[10][6], registers.q[10][7]};
+    
+    grid[2] = c{ registers.q[9][63:56], 
+    registers.q[9][48], registers.q[9][49], registers.q[9][50], registers.q[9][51], registers.q[9][52], registers.q[9][53], registers.q[9][54], registers.q[9][55], 
+    registers.q[9][47:40],
+    registers.q[9][32], registers.q[9][33], registers.q[9][34], registers.q[9][35], registers.q[9][36], registers.q[9][37], registers.q[9][38], registers.q[9][39], 
+    registers.q[9][31:24],
+    registers.q[9][16], registers.q[9][17], registers.q[9][18], registers.q[9][19], registers.q[9][20], registers.q[9][21], registers.q[9][22], registers.q[9][23], 
+    registers.q[9][15:8], 
+    registers.q[9][0], registers.q[9][1], registers.q[9][2], registers.q[9][3], registers.q[9][4], registers.q[9][5], registers.q[9][6], registers.q[9][7] };
+    
+    grid[3] = c{ registers.q[6][63:56], 
+    registers.q[6][48], registers.q[6][49], registers.q[6][50], registers.q[6][51], registers.q[6][52], registers.q[6][53], registers.q[6][54], registers.q[6][55], 
+    registers.q[6][47:40],
+    registers.q[6][32], registers.q[6][33], registers.q[6][34], registers.q[6][35], registers.q[6][36], registers.q[6][37], registers.q[6][38], registers.q[6][39], 
+    registers.q[6][31:24],
+    registers.q[6][16], registers.q[6][17], registers.q[6][18], registers.q[6][19], registers.q[6][20], registers.q[6][21], registers.q[6][22], registers.q[6][23], 
+    registers.q[6][15:8], 
+    registers.q[6][0], registers.q[6][1], registers.q[6][2], registers.q[6][3], registers.q[6][4], registers.q[6][5], registers.q[6][6], registers.q[6][7] };
+    
+    // To output current player for current_player led
+    current_player = registers.q[4][1:0];
+    
+    // To output current timer data
+    current_timer = registers.q[8][7:0];  // MSB is for timing enabler
+    
+    // Debug output
+    debug_register_output = registers.q[debug_register_index];
+  }
+}

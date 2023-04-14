@@ -1,0 +1,84 @@
+module motherboard (
+    input clk,  // clock
+    input rst,  // reset
+    input slowclk, 
+    output id[32],
+    output ia[32],
+    output debug[4][16],
+    input debug_register_index[4],     // (Debug) to pick register 
+    output debug_reg_content[64],
+    output led_matrix_output,     // to output to au_top to output bitbang bits to led_matrix
+    output led_current_player[2],  // to output to au_top to output signal for rgb led
+    input playerButtoninput[5],     // To input the button press from au_top to the player_button_handler
+    input valid_led_on,           // Signal to determine if valid led grid should be ON
+    input buzzer_on,              // Signal to turn on buzzer
+    input reset_signal,            // To trigger RESET, to restart the game
+    output led_player_timer[8],
+    output buzzer_output                   // To send signal out to external buzzer
+   ) {
+
+  // Beta CPU
+  beta_cpu beta(.clk(clk));
+  
+  // setup and instantiate memory unit and instruction ROM
+  const MEMORY_SIZE = 680;
+  instruction_rom instruction_unit(#WORDS(MEMORY_SIZE));
+  memory_unit memory_unit(#WORDS(MEMORY_SIZE), .clk(clk)); 
+  
+  // counter to write instructions from ROM to instruction memory
+  dff writer_counter[$clog2(MEMORY_SIZE)](.clk(clk));
+  fsm motherboard(.clk(clk)) = {INSTRUCTIONLOAD, RUN};
+  
+  always {
+    instruction_unit.addr = 0; // always set to 0 initially
+    
+    // BETA connections    
+    beta.slowclk = slowclk; 
+    beta.rst = rst;
+    beta.playerButtoninput = playerButtoninput;
+    beta.valid_led_on = valid_led_on;
+    beta.reset_signal = reset_signal;            // To trigger reset of game (Restart game)
+    beta.buzzer_on = buzzer_on;                  // To propagate to outputHandler to turn on buzzer
+    beta.debug_register_index = debug_register_index;
+    debug_reg_content = beta.debug_reg_content;
+    
+    // To go to au_top to output to led matrix, led timer, player indicator led, external buzzer
+    led_matrix_output = beta.led_matrix_output;   // bits required for bitbanging to output to led_matrix
+    led_current_player = beta.led_current_player; // sigs required for rgb led to indicate current player
+    led_player_timer =  beta.led_player_timer;    // bits required to output 7 segment displays for the respective player timers
+    buzzer_output = beta.buzzer_output;           // To send bits to chime external buzzer
+    
+    // connect memory unit with beta 
+    beta.instruction = memory_unit.id;
+    memory_unit.ia = beta.ia[31:0]; 
+    
+    // turn off instruction loading
+    memory_unit.instruction_write_enable = b0;
+    memory_unit.instruction_towrite = 32b0; 
+  
+    // Load ROM instructions to RAM first, then run the Beta 
+    case(motherboard.q){
+        // instruction loading
+        motherboard.INSTRUCTIONLOAD:
+            beta.rst = 1;
+            writer_counter.d = writer_counter.q + 1;
+            instruction_unit.addr = writer_counter.q;
+            memory_unit.instruction_towrite = instruction_unit.out;
+            memory_unit.instruction_write_enable = b1;
+            memory_unit.ia = writer_counter.q<<2; // pad with two zeroes to make it byte addressable because memory_unit expects byte addresing ia
+            if ((writer_counter.q + 1) == MEMORY_SIZE){
+                motherboard.d = motherboard.RUN; // wait one more clock cycle to allow the last instruction to be loaded before start execution
+        }
+        
+        motherboard.RUN:
+                motherboard.d = motherboard.RUN;
+    }
+    
+    // output values
+    ia = beta.ia;
+    id = memory_unit.id;
+    debug = beta.debug;
+    debug_reg_content = beta.debug_reg_content;
+
+  }
+}

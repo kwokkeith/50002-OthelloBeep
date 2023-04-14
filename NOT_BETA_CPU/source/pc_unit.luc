@@ -1,0 +1,71 @@
+module pc_unit (
+    input clk,  // clock
+    input rst,  // reset
+    input slowclk, // slowclock to advance pc
+    input id[18],
+    input pcsel[3],
+    input reg_data_1[64],
+    output pc_4[32],
+    output pc_4_sxtc[32],
+    output pcsel_out[32], // for debug only, does not exist in pc_unit
+    output ia[32],
+    input reset_signal    // External reset signal to restart the game    
+  ) {
+
+  dff pc[32](#INIT(0),.clk(clk)); // PC Register
+
+  sig pcsel_out_sig[32];
+  sig pc_4_sxtc_32_sig[32];
+  sig pc_4_sxtc_sig[32];
+  sig pc_4_sig[32];
+  
+  always { // Always block -> Defines the connection. Happens in parallel (i.e no row by row operations)
+  
+    // initial setups to silence output compilation errors
+    pc_4_sig = 0;
+    pc_4_sxtc_sig = 0;
+    pcsel_out_sig = 0;
+    
+    // increment pc by 4
+    pc_4_sig = c{pc.q[31], pc.q[30:0] + 4};            
+    
+    // shift-and-add pc by 4
+    
+    pc_4_sxtc_32_sig = pc.q + 4 + (4 * c{14x{id[17]}, id[17:0]});
+    pc_4_sxtc_sig = pc_4_sxtc_32_sig[31:0];
+    
+    // PCSEL mux 
+    case (pcsel){
+      b000: 
+        pcsel_out_sig = pc_4_sig;
+      b001:
+        pcsel_out_sig = pc_4_sxtc_sig;
+      b010:
+        pcsel_out_sig = reg_data_1[31:0];
+      default:
+        pcsel_out_sig = pc.q;
+     }
+    
+    // advance the PC only when slowclk is 1 
+    if (slowclk){
+      pc.d = c{pcsel_out_sig[31:2], b00}; // setting of pcreg content must happen only when slowclk == 1, don't bring this outside of if (slowclk) clause
+    }
+
+    // RESET mux 
+    if (rst){
+        pc.d = h0; // reset can happen anytime regardless of slowclk
+    }
+    
+    if (reset_signal){
+        pc.d = h0; // if external reset signal is HIGH, then restart the game
+    }
+    
+    // output connections
+    ia = pc.q;
+    pc_4 =  pc_4_sig;
+    pc_4_sxtc = pc_4_sxtc_sig;
+    pcsel_out = pcsel_out_sig;
+    
+    
+  }
+}

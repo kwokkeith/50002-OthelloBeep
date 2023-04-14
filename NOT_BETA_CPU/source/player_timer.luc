@@ -1,0 +1,50 @@
+module player_timer (
+    input clk,  // clock
+    input rst,  // reset
+    input current_player[2],  // 2 bits to represent current player
+    input timer_input[9],    // 8 bits to represent the 2 x external 7 segment timer for player 1 and player 2
+    output out[8],
+    input slowclk
+  ) {
+  
+  fsm current_player_state(.clk(clk), .rst(rst)) = { PLAYER1, PLAYER2 };
+  dff ctr[27](.clk(clk), .rst(rst));  //  To count 100 Million clocks --> 1 second
+  
+  always {
+    out = b0;
+    ctr.d = b0;
+    if (timer_input[8] == b1){    // enabled timer
+      if (current_player == b01){  // Player 1
+         if (current_player_state.q == current_player_state.PLAYER2){
+            ctr.d = b0;    // Reset counter to 0 to start 1 second decrement
+            current_player_state.d = current_player_state.PLAYER1;    // change state to Player 1 (other player)
+         }
+        ctr.d = ctr.q;
+         if(slowclk){
+           ctr.d = ctr.q + 1;  // Increment counter every clock cycle
+         
+          if (ctr.q == d100000000){  // If counter hits 100 Million, reset back to 0 and decrease counter by 1
+             out = c{timer_input[7:4], timer_input[3:0] - 1}; 
+             ctr.d = b0;
+         }
+        }
+     }
+      
+      if (current_player == b10){  // Player 2
+        if (current_player_state.q == current_player_state.PLAYER1){
+            ctr.d = b0;
+            current_player_state.d = current_player_state.PLAYER2;  
+        }
+        ctr.d = ctr.q;
+        if(slowclk){
+             ctr.d = ctr.q + 1;  // Increment counter every clock cycle
+           
+            if (ctr.q == d100000000){  // If counter hits 100 Million, reset back to 0 and decrease counter by 1
+               out = c{timer_input[7:4] - 1, timer_input[3:0]};
+               ctr.d = b0;
+          }
+        }
+       }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+module regfile_unit (
+    input clk,  // clock
+    input rst,  // reset
+    input ra[4],
+    input rb[4], 
+    input rc[4],
+    input werf,
+    input wdsel_out[64],
+    input slowclk,
+    output z,
+    output reg_data_1[64],
+    output reg_data_2[64],
+    output grid[4][64],
+    output current_player[2],
+    output current_timer[8],
+    input debug_register_index[4], // (debug) to pick register 
+    output debug_reg_content[64]   // (Debug) to get register content
+  ) {
+  
+  regfile_memory regfile(.clk(clk), .rst(rst));
+  sig ra2sel_out[4];
+  
+  always {
+  
+    // initial setups to silence output compilation errors
+    ra2sel_out = 0;
+    z = 0;
+    
+    //*****REGFILE*******//
+    // do not write anything to the regfile unless PC advances 
+    regfile.write_enable = 0;
+    if (slowclk) {
+      regfile.write_enable = werf;
+    }
+  
+    // connections to regfile memory
+    regfile.read_address_2 = rb;
+    regfile.read_address_1 = ra;
+    regfile.write_address = rc;
+    regfile.write_data = wdsel_out;
+    
+    // compute z 
+    z = ~|regfile.reg_data_1;
+    
+    // output connections
+    reg_data_1 = regfile.reg_data_1; 
+    reg_data_2 = regfile.reg_data_2;
+    grid = regfile.grid;
+    current_player = regfile.current_player;
+    current_timer = regfile.current_timer;
+    
+    
+    // debug output
+    regfile.debug_register_index = debug_register_index;
+    debug_reg_content = regfile.debug_register_output;
+  }
+}

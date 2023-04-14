@@ -1,0 +1,149 @@
+module beta_cpu (
+    input clk,  // clock
+    input slowclk,
+    input rst,
+    input instruction[32],
+    output ia[32],
+    output debug[4][16],
+    output led_matrix_output,
+    output led_current_player[2],  
+    input playerButtoninput[5],     // To input the button press from au_top to the player_button_handler
+    input valid_led_on,             // signal to turn on VALID LED GRID
+    input buzzer_on,                // signalt to turn on buzzer
+    input reset_signal,             // signal to trigger reset of game (restart game)
+    output led_player_timer[8],     // output for external 7 segment 
+    output debug_reg_content[64],   // (Debug) For Register content
+    input debug_register_index[4],     // (Debug) to pick register 
+    output buzzer_output            // To send signal out to external buzzer
+
+
+   ) {
+  
+  control_unit control_system;
+  alu alu_system;
+  regfile_unit regfile_system(.clk(clk), .rst(rst));
+  pc_unit pc_system(.clk(clk), .rst(rst));
+  player_button_handler buttonHandler;
+
+  output_handler outputHandler(.clk(clk), .rst(rst));
+  
+  dff player_button_buffer[3](.clk(clk), .rst(rst));
+  dff reset_button_buffer(.clk(clk), .rst(rst));
+  
+  // Respective signals used
+  sig bsel_out[64];
+  sig wdsel_out[64];
+
+  always {
+    // initial setups to silence output compilation errors
+    ia = 0;
+    debug = 4x{{16h0}};
+    control_system.opcode = 0;
+    control_system.z = 0;
+    regfile_system.ra = 0;
+    regfile_system.rb = 0;
+    regfile_system.rc = 0;
+    regfile_system.werf = 0;
+    regfile_system.slowclk = 0;
+    pc_system.slowclk = 0;
+    pc_system.id = 0;
+    pc_system.reg_data_1 = 0;
+    pc_system.pcsel = 0;
+    
+    //****** Player Button Handler unit ****** *//
+    buttonHandler.player_button = playerButtoninput;
+    player_button_buffer.d = buttonHandler.out;    // To pass player button output
+    
+    if (player_button_buffer.q != b0){             // To latch player button until it can be handled by slowclk
+        player_button_buffer.d = player_button_buffer.q;
+    }
+    
+    //****** Output Handler unit ****** *//
+    outputHandler.grid = regfile_system.grid;  // Send grid from regfile to output handler to get bits to light up led matri32h
+    led_matrix_output = outputHandler.outled;  // output bits required to light up led matrix
+    outputHandler.current_player = regfile_system.current_player;  // send bits representing current player to output handler
+    led_current_player = outputHandler.current_player_LED_sig;   // output signals to light up rgb led    
+    outputHandler.valid_led_on = valid_led_on;    // To turn on led matrix for valid grid
+    outputHandler.buzzer_on = buzzer_on;
+    buzzer_output = outputHandler.buzzer_output;  // To chime the buzzer when player switch
+     
+    //****** Player Timer Counter unit *******//
+      led_player_timer = regfile_system.current_timer; // Sends bits to motherboard to be sent to au_top to the e32hternal 7-segment
+    
+    //****** ALU + WDSEL unit *******//
+    alu_system.alufn_signal = control_system.alufn;
+
+    // BSEL mu32h
+    case(control_system.bsel){
+      b0:
+        bsel_out = regfile_system.reg_data_2;
+      b1:
+        bsel_out = instruction[17:0];
+        
+      default:
+        bsel_out = regfile_system.reg_data_2;
+    }
+
+    // WDSEL mu32h
+    case(control_system.wdsel){
+      b00:
+        wdsel_out = pc_system.pc_4; // Supervisor bit is already protected in pc_unit
+      b01: 
+        wdsel_out = alu_system.out;  
+      b11:
+        wdsel_out = player_button_buffer.q;
+        if (slowclk){
+          player_button_buffer.d = b0;          // Latch player button buffer back to b0 (Ready to take in ne32ht player button input)
+        }
+      default:
+        wdsel_out = alu_system.out;
+    } 
+    
+    // output connections
+    alu_system.a = regfile_system.reg_data_1;
+    alu_system.b = bsel_out; 
+    regfile_system.wdsel_out = wdsel_out;
+    
+    //***** CONTROL unit ******// 
+    control_system.opcode = instruction[31:26];
+    control_system.z = regfile_system.z;
+
+    //***** PC unit ******// 
+    pc_system.slowclk = slowclk;
+    pc_system.reg_data_1 = regfile_system.reg_data_1;
+    pc_system.pcsel = control_system.pcsel;
+    pc_system.id = instruction[17:0];
+    ia = pc_system.ia;
+    
+    // Propagate external reset signal to PC unit
+    pc_system.reset_signal = reset_button_buffer.q;
+    reset_button_buffer.d = reset_signal;
+
+    // Latch reset signal (external)
+    if (reset_button_buffer.q != b0){             // To latch reset button until it can be handled by slowclk
+       reset_button_buffer.d = reset_button_buffer.q;
+    }
+   
+    if (slowclk){    
+      if (reset_button_buffer.q != b0){  // To clear reset button buffer at the current e32hecution clock
+        
+        // Functions for when (external) reset button is pressed
+        reset_button_buffer.d = b0;
+      }
+    }
+
+    //***** REGFILE unit *****//
+    regfile_system.slowclk = slowclk;
+    regfile_system.werf = control_system.werf;
+    regfile_system.ra = instruction[21:18];
+    regfile_system.rb = instruction[17:14];
+    regfile_system.rc = instruction[25:22];
+
+    // debug signals
+    debug[0][15:0] = pc_system.pc_4_sxtc[15:0];
+    debug[2][15:0] = bsel_out[15:0];
+    debug[3][15:0] = wdsel_out[15:0];
+    
+    debug_reg_content = regfile_system.debug_reg_content;
+    regfile_system.debug_register_index = debug_register_index;
+}
