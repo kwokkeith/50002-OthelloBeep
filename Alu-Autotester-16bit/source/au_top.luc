@@ -1,0 +1,320 @@
+module au_top (
+    input clk,              // 100MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input usb_rx,           // USB->Serial input
+    output usb_tx,          // USB->Serial output
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8],     
+    output customout[1],    // output for led to indicate error mode in tester
+    output led_aluError[1]  // output for led to indicate alu has an error
+  ) {
+  
+  sig rst;                  // reset signal
+  sig current_value[16];    // Current value input by user (For Feedback)
+  alu alu;     // ALU unit
+  error_Unit error_unit(.clk(clk));    // error unit, input to run through this unit before feeding it into alu
+  random_number_unit randomUnit(.clk(clk), .rst(rst));
+  
+  
+  // Binary to Decimal converter -> to convert bit to decimal for 7 segment displays
+  bin_to_dec bin_dec_converter(#DIGITS(5));
+  
+  .clk(clk) {
+  
+    // FSM to keep track of the current state of program flow
+    fsm flow_state = 
+    {WAITING_A, WAITING_B, OUTPUT, DEBUG}; 
+    
+    reset_conditioner reset_cond;                      // To sync reset with FPGA clock
+    
+    // ******************************************* 
+    // ************ BUTTON COMPONENTS ************
+    // *******************************************
+    
+    // Next Button
+    dff next_button;                                            // Store next button input
+    button_conditioner next_button_conditioner;                 // Button Conditioner to move to next state
+    edge_detector next_button_edge(#RISE(1), #FALL(0));         // edge detector for button press to prevent constant input of 1s if user hold
+    
+    // Reset Button
+    dff reset_button;                                           // Store reset button for program (NOT mainboard)
+    button_conditioner reset_button_conditioner;                // Button Conditioner to move to initial FSM state
+    edge_detector reset_button_edge(#RISE(1), #FALL(0));        // Edge detector for button press
+    
+    // Error Button
+    dff error_button;                                           // Store error button to cause an error in B input
+    button_conditioner error_button_conditioner;        
+    edge_detector error_button_edge(#RISE(1), #FALL(0));        // Edge detector for button press
+
+    // Debug Button
+    dff debug_button;                                           // Store debug button to move to test circuit mode
+    button_conditioner debug_button_conditioner;                // Button Conditioner to move to initial FSM state
+    edge_detector debug_button_edge(#RISE(1), #FALL(0));        // Edge detector for button press
+    
+    // Debug mode: next state (next protocol)                                      
+    button_conditioner debug_nxtst_button_conditioner;          // next button (debug mode) to advance to next protocol
+    edge_detector debug_nxtst_button_edge(#RISE(1), #FALL(0));  // Edge detector for button press
+    
+    
+    // ******************************************** 
+    // ************ TESTER COMPONENT ************
+    // ********************************************
+    
+    auto_tester tester(.rst(rst));        // To test ALU functionality (Test Circuit)
+    
+    // ****************************************************** 
+    // ************ A & B VAL MEMORY COMPONENTS *************
+    // ******************************************************
+    .rst(rst) {
+      dff state_A[16];                    // DFF to store input of A
+      dff state_B[16];                    // DFF to store input of B
+      multi_seven_seg seg(#DIGITS(5));    // Seven segment display
+    }
+  }
+    
+  // ********************************* 
+  // ********** CONNECTIONS **********
+  // ********************************* 
+  
+  always {
+    reset_cond.in = ~rst_n;  // input raw inverted reset signal
+    rst = reset_cond.out;    // conditioned reset
+    
+    led = c{3b0, io_button}; // connect buttons to LEDs
+    
+    usb_tx = usb_rx;         // loop serial port
+    
+    io_led = 3x{{h00}};      // set led by default to be off
+    io_seg = 8hff;           // connect segments to the driver
+    io_sel = 4hf;            // connect digit select to the driver
+    
+    // ******************************************** 
+    // ************ BUTTONS CONNECTION ************
+    // ********************************************
+    
+    // Next Button
+    next_button_conditioner.in = io_button[4];           // right button
+    next_button_edge.in = next_button_conditioner.out;
+    next_button.d = next_button_edge.out;
+    
+    
+    // Reset Button (For this program)
+    reset_button_conditioner.in = io_button[0];          // top button
+    reset_button_edge.in = reset_button_conditioner.out;
+    reset_button.d = reset_button_edge.out;
+    
+    // If reset Button is pressed, then reset program flow state to initial state
+    if (reset_button.q) {
+       flow_state.d = flow_state.WAITING_A;
+       reset_button.d = b0;
+    }
+    
+    // default induce error signal
+    error_unit.induce_error = b0;
+    
+    // Error Button
+    error_button_conditioner.in = io_button[1];         // Middle button
+    error_button_edge.in = error_button_conditioner.out;
+    error_button.d = error_button_edge.out;
+    // Connect error_button signal with alu
+    // if error button is pressed, then toggle between error states on error unit
+    if (error_button.q) {
+       error_unit.induce_error = b1;
+       error_button.d = b0;
+    }
+    // Light up led when ALU is in error mode
+    led_aluError = error_unit.aluError_signal;
+
+    // Debug Button (To change to test mode)
+    debug_button_conditioner.in = io_button[2]; // bottom button
+    debug_button_edge.in = debug_button_conditioner.out;
+    debug_button.d = debug_button_edge.out;
+    tester.new_test = b0;
+    // If debug Button is pressed, then set program flow state to debug state
+    if (debug_button.q) {
+       flow_state.d = flow_state.DEBUG;
+       debug_button.d = b0;
+       tester.new_test = b1;
+    }
+    
+    // To set default for debug buttons    
+    debug_nxtst_button_conditioner.in = b0;
+    debug_nxtst_button_conditioner.in = io_button[3];
+    debug_nxtst_button_edge.in = debug_nxtst_button_conditioner.out;
+     
+    // *********************************  
+    // ******* TESTER CONNECTIONS ******
+    // ********************************* 
+    
+    tester.next_error_state = debug_nxtst_button_edge.out; // If during error mode button is pressed to toggle between outputs
+    customout = b0;                                        // keep led for error mode of tester off
+    tester.alu_out = b0;
+    
+    // *********************************
+    // ********* RANDOM UNIT ***********
+    // *********************************
+    randomUnit.a = b0;
+    randomUnit.b = b0;
+    
+    // *********************************  
+    // ******** ALU CONNECTIONS ********
+    // ********************************* 
+    
+    // connect ALU
+    // Run through error unit to see if alu should contain an error
+    error_unit.inp_alu_a = state_A.q;
+    error_unit.inp_alu_b = state_B.q;
+    alu.a = error_unit.out_alu_a;
+    alu.b = error_unit.out_alu_b;
+    
+    error_unit.inp_alufn = io_dip[2][5:0];      // pass alufn to error unit to induce error if needed
+    alu.alufn_signal = error_unit.out_alufn;    // Pass inputs to ALU unit
+    
+    // set converter's default value
+    // Check if random number generation signal is received from alu
+    if (alu.random_number_signal == b1){
+        randomUnit.a = alu.out[15:14];              // output of alu (2 most sigificant bits) are for randomUnit's a input (to choose which clk speed setting)
+        randomUnit.b = alu.out[13:0];               // output of alu (the other bits) are for randomUnit's b input (to modify random seed)
+        bin_dec_converter.value = randomUnit.out;   // feed randomUnit's output to the binary-decimal converter for 7-segment led
+        }
+    else { bin_dec_converter.value = alu.out; }     // If alu not generating random number, then alu output is fed directly to binary-decimal converter
+    
+    // set multi_seven_seg default value
+    seg.values = bin_dec_converter.digits; 
+     
+    // Number on 7-segment display
+    io_seg = ~seg.seg;
+    io_sel = ~seg.sel;    
+    
+    // ********************************* 
+    // ******** FLOW OF PROGRAM ********
+    // ********************************* 
+    
+    case(flow_state.q){
+      // *************************** 
+      // ******** WAITING_A ********
+      // ***************************
+      // Waits for user button press to store value A
+      flow_state.WAITING_A:
+      
+        // Feedback to user on value
+        io_led[1] = io_dip[1];
+        io_led[0] = io_dip[0]; 
+        
+        // Display current value set by user (help user select value)
+        current_value[15:8] = io_dip[1];            // Record inputted value from user
+        current_value[7:0] = io_dip[0];
+        bin_dec_converter.value = current_value;    // To convert current input value to decimal for 7-segment
+        seg.values = bin_dec_converter.digits;      // To output current value in 7-segment
+  
+        // Output to indicate to user that the value has overflow pass 4 decimal values (b1010 means d0)
+        io_led[2][4:0] = bin_dec_converter.digits[4];        
+          
+        // For feedback on state
+        io_led[2][7:6] = b10;
+        
+        // If button input is pressed
+        if (next_button.q) {
+          state_A.d[15:8] = io_dip[1];           // Store Higher 8 bits of 'A' using io_dip[1]
+          state_A.d[7:0] = io_dip[0];            // Store Lower 8 bits of 'A' using io_dip[0]
+          flow_state.d = flow_state.WAITING_B;   // Update flow_state
+          next_button.d = b0;                    // Reset button dff
+          }
+        
+      // *************************** 
+      // ******** WAITING_B ********
+      // ***************************  
+      // Waits for user button press to store value B
+      flow_state.WAITING_B:
+        // Feedback to user on value
+        io_led[1] = io_dip[1];
+        io_led[0] = io_dip[0];
+        
+        // Output to indicate to user that the value has overflow pass 4 decimal values (b1010 means d0)
+        io_led[2][4:0] = bin_dec_converter.digits[4];       
+           
+        // For feedback on state
+        io_led[2][7:6] = b11;
+        
+        // Display current value set by user (help user select value)
+        current_value[15:8] = io_dip[1];
+        current_value[7:0] = io_dip[0];
+        bin_dec_converter.value = current_value;
+        seg.values = bin_dec_converter.digits;
+        
+        // If button input is pressed
+        if (next_button.q) {
+          state_B.d[15:8] = io_dip[1];               // Store Higher 8 bits of 'B' using io_dip[1]
+          state_B.d[7:0] = io_dip[0];                // Store Lower 8 bits of 'B' using io_dip[0]
+          flow_state.d = flow_state.OUTPUT;          // Change state to OUTPUT
+          next_button.d = b0;                        // Reset button dff
+          }
+        
+      // *************************** 
+      // ********* OUTPUT **********
+      // ***************************    
+      // Display values/output from ALU
+        
+      flow_state.OUTPUT:
+          // Display outputs
+          // Bits on LED
+          io_led[1] = alu.out[15:8];
+          io_led[0] = alu.out[7:0];
+          
+          io_led[2][4:0] = bin_dec_converter.digits[4]; // Output to indicate to user that the value has overflow pass 4 decimal values      
+        
+          // For zvn
+          io_led[2][7] = alu.zvn[0];   // z is at Left-most bit of io_led[2]
+          io_led[2][6] = alu.zvn[1];   // v the next bit to the right of z
+          io_led[2][5] = alu.zvn[2];   // n the next bit to the right of v
+        
+          // If next button pressed
+          if (next_button.q) {
+            flow_state.d = flow_state.WAITING_A;
+          }
+     
+      // *************************** 
+      // ****** DEBUG MODE *********
+      // *************************** 
+      flow_state.DEBUG:
+          state_A.d = tester.alu_a;                   // set tester's alu a output to state A dff
+          state_B.d = tester.alu_b;                   // set tester's alu b output to state B dff
+          error_unit.inp_alufn = tester.alufn;        // send tester's alufn to error_unit alufn input to check if need to induce error
+          alu.alufn_signal = error_unit.out_alufn;    // take the alufn signal from the error_unit
+        
+          tester.alu_out = c{alu.out, alu.zvn};  
+        
+          bin_dec_converter.value = tester.out[18:3];
+          seg.values = bin_dec_converter.digits;
+          
+          // Display outputs        
+          // Bits on LED
+          io_led[1] = tester.out[18:11];
+          io_led[0] = tester.out[10:3];
+          
+          io_led[2][3:0] = bin_dec_converter.digits[4];
+        
+          // For zvn
+          io_led[2][7] = tester.out[2];   // z is at Left-most bit of io_led[2]
+          io_led[2][6] = tester.out[1];   // v the next bit to the right of z
+          io_led[2][5] = tester.out[0];   // n the next bit to the right of v
+        
+          // LED to indicate correct output module
+          if (tester.correct_output_signal == b1) {
+            io_led[2][4] = b1;
+          }
+        
+          // Light up when tester in error module
+          customout = tester.error_mode_signal;  
+        
+          // if successfully finish
+          if (tester.success_signal == b1) {
+             io_led[0] = 8hFF;
+             io_led[1] = 8hFF;
+             io_led[2] = 8hFF;
+  }
+}

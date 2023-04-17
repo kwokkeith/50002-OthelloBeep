@@ -1,0 +1,29 @@
+module random_number_unit (
+    input a[2],
+    input b[14],
+    output out[16],
+    input clk,  // clock
+    input rst  // reset
+    ) {
+
+  // RandomNumber unit to generate new 32 bit output
+  pn_gen randomNumber(.clk(clk), .rst(rst)); 
+  
+  const MAXSLOWCLOCKSIZE = 28;                                        // Maximum clock size (slowest speed division)
+  counter slowClock(#SIZE(MAXSLOWCLOCKSIZE), .clk(clk), .rst(rst));   // counter for slow clock
+  edge_detector slowClockEdge(#RISE(1), #FALL(0), .clk(clk));         // to detect rising edge of slow clock
+  const INITIALCLOCK = 25;                                            // Smallest possible clock size (fastest speed division)
+  
+  sig time_index[8];
+  always {
+    // generate random number seed
+    randomNumber.seed = c{18hABCDE, b}; // b, 14 bit input to form 32 bit seed for random number generator 
+    // time_index should be in the range of (a = d0-d3), 2 bits input
+     time_index = INITIALCLOCK + a - 1;  // to choose the correct clock speed for the random number generator
+     
+     slowClockEdge.in = slowClock.value[time_index];   
+     randomNumber.next = slowClockEdge.out;           // set next number flag to high
+     
+     out[15:0] = c{randomNumber.num[3:0]}; // only need to output d16 number of combinations as there will be only 16 leds and buttons to press 
+  }
+}

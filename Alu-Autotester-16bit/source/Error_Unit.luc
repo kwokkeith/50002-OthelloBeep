@@ -1,0 +1,40 @@
+module error_Unit (
+    input clk,  // clock
+    input induce_error,   // signal to induce an error
+    output aluError_signal, // signal to light up led representing that alu contains error
+    input inp_alu_a[16],
+    input inp_alu_b[16],
+    input inp_alufn[6],
+    output out_alu_a[16],
+    output out_alu_b[16],
+    output out_alufn[6]
+    ) {
+    
+  fsm error_state(.clk(clk)) = {NO_ERROR, ERROR};
+  
+  always {
+    case (error_state.q) {
+      error_state.NO_ERROR:
+        out_alu_a = inp_alu_a;
+        out_alu_b = inp_alu_b;
+        out_alufn = inp_alufn;
+        aluError_signal = b0;
+      error_state.ERROR:
+        out_alu_a = inp_alu_a;
+        out_alu_b = c{inp_alu_b[15:1], ~inp_alu_b[0]};
+        out_alufn = inp_alufn;
+        aluError_signal = b1;
+    default: 
+        out_alu_a = inp_alu_a;
+        out_alu_b = inp_alu_b;
+        out_alufn = inp_alufn;
+        aluError_signal = b0;
+    }
+        
+     // To toggle between states
+        if (induce_error == b1) { 
+            case(error_state.q){
+          error_state.NO_ERROR: error_state.d = error_state.ERROR;
+          error_state.ERROR: error_state.d = error_state.NO_ERROR;
+  }
+}

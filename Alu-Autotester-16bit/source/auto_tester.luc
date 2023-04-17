@@ -1,0 +1,286 @@
+module auto_tester (
+    input clk,  // clock
+    input rst,  // reset
+    output out[19], // output from tester
+//    input debug_mode,     // to get from au_top that debug mode is on
+    input next_error_state, // Signal to move to next error state
+    input new_test,         // to indicate new test
+    output success_signal,    // to indicate alu passed the test
+    output error_mode_signal, // to indicate to turn on led for error mode
+    output alu_a[16],
+    output alu_b[16],
+    output alufn[6],
+    input alu_out[19],
+    output correct_output_signal  // to send to au_top to indicate test is in correct output
+  ) {
+  
+//  alu alu(.clk(clk));      // alu unit
+  
+  const SLOWCLOCK_SIZE = 25;
+  counter slowClock(#SIZE(SLOWCLOCK_SIZE), .clk(clk), .rst(rst));
+  edge_detector slowClockEdge(.clk(clk), #RISE(1), #FALL(0));
+  
+  dff current_state[12](.clk(clk), .rst(rst));
+  fsm test_state(.clk(clk), .rst(rst)) = {DOTEST, SUCCESS, ERROR};
+  fsm error_states(.clk(clk), .rst(rst)) = { ID, ALUFN, CORRECT };
+  
+  sig correctOutput[16];  // store correct alufn output
+  sig correctZVN[3];      // store correct zvn
+  sig currentState[12];    // store current state
+  sig aluoutzvn[3];       // zvn output from alu
+  const TEST_CASES =
+  {  
+  
+    // Addition Test Cases
+    c{48h000000000000, 6b0, 3b100, 12d01}, // 0 + 0 = 0, zvn =  100
+    c{48h7FFF00007FFF, 6b0, 3b000, 12d02}, // x + 0 = x, zvn =  000
+    c{48h00007FFF7FFF, 6b0, 3b000, 12d03}, // 0 + x = x, zvn =  000
+    c{48hFFFF0000FFFF, 6b0, 3b001, 12d04}, // (-x) + 0 = (-x), zvn =  001
+    c{48h0000FFFFFFFF, 6b0, 3b001, 12d05}, // 0 + (-x) = (-x), zvn =  001
+    c{48h12344567579B, 6b0, 3b000, 12d06}, // 0x1234 + 0x4567 = 0x579B, zvn =  000
+    c{48hF801F820F021, 6b0, 3b001, 12d07}, // 0xF801 + 0xF820 = 0xF021, zvn =  001
+    c{48hDE0000ADDEAD, 6b0, 3b001, 12d08}, // 0xDE00 (-ve) + 0x00AD (+ve) = 0xDEAD, zvn =  001
+    c{48h00EFBE00BEEF, 6b0, 3b001, 12d09}, // 0x00EF (+ve) + 0xBE00 (-ve) = 0xBEEF, zvn =  001
+    c{48hFFFFFFFFFFFE, 6b0, 3b001, 12d10}, // 0xFFFF + 0xFFFF = 0xFFFE, zvn =  001
+    c{48h70007000E000, 6b0, 3b011, 12d11}, // Positive Overflow, zvn =  011
+    c{48hBFFF80014000, 6b0, 3b010, 12d12}, // Negative Overflow, zvn =  010
+    
+    // Subtraction Test Cases
+    c{48h000000000000, 6b1, 3b100, 12d13}, // 0 - 0 = 0, zvn =  100
+    c{48h7FFF00007FFF, 6b1, 3b000, 12d14}, // x - 0 = x, zvn =  000
+    c{48h00007FFF8001, 6b1, 3b001, 12d15}, // 0 - x = (-x), zvn =  001
+    c{48hFFFF0000FFFF, 6b1, 3b001, 12d16}, // (-x) - 0 = (-x), zvn =  001
+    c{48h0000FFFF0001, 6b1, 3b000, 12d17}, // 0 - (-x) = x, zvn =  000
+    c{48hFFFFBFFF4000, 6b1, 3b000, 12d18}, // 0xFFFF - 0xBFFF = 0x4000, zvn =  000   ( (-ve) - (+ve) )
+    c{48h765454322222, 6b1, 3b000, 12d19}, // 0x7654 - 0x5432 = 0x2222 (a - b), zvn =  000 ( (+ve) - (+ve) = +ve )
+    c{48h54327654DDDE, 6b1, 3b001, 12d20}, // 0x5432 - 0x7654 = 0xDDDE (a - b), zvn =  001 ( (+ve) - (+ve) = -ve )
+    c{48hEDCBDCBA1111, 6b1, 3b000, 12d21}, // 0xEDCB - 0xDCBA = 0x1111 (a - b), zvn =  000 ( (-ve) - (-ve) = +ve )
+    c{48hDCBAEDCBEEEF, 6b1, 3b001, 12d22}, // 0xDCBA - 0xEDCB = 0xEEEF (a - b), zvn =  001 ( (-ve) - (-ve) = -ve )
+    c{48h7FFF8000FFFF, 6b1, 3b011, 12d23}, // 0x7FFF - 0x8000 = 0xFFFF (a - b), zvn =  011 ( (+ve) - (-ve) = -ve ) (Overflow) 
+    c{48h80007FFF0001, 6b1, 3b010, 12d24}, // 0x8000 - 0x7FFF = 0x0001 (a - b), zvn =  010 ( (-ve) - (+ve) = +ve ) (Overflow)
+    
+    // Multiplication Test Cases
+    c{48h0004FFFEFFF8, 6b000010, 3b000, 12d25}, // (0x0004 * 0xFFFE) = 0xFFF8, zvn =  000 ( +ve * -ve )
+    c{48h000400040010, 6b000010, 3b000, 12d26}, // (0x0004 * 0x0004) = 0x0010, zvn =  000 ( +ve * +ve )
+    c{48hFFFF0004FFFC, 6b000010, 3b000, 12d27}, // (0xFFFF * 0x0004) = 0xFFFC, zvn = 000 ( -ve * +ve )
+    c{48hFFFFFFFF0001, 6b000010, 3b001, 12d28}, // (0xFFFF * 0xFFFF) = 0x0001, zvn = 001 ( -ve * -ve )    
+    c{48h000000000000, 6b000010, 3b100, 12d29}, // (0x0000 * 0x0000) = 0x0000, zvn =  100  ( 0 * 0 )
+    c{48h00004FFF0000, 6b000010, 3b000, 12d30}, // (0x0000 * 0x4FFF) = 0x0000, zvn =  000  ( 0 * +ve )
+    c{48h4FFF00000000, 6b000010, 3b000, 12d31}, // (0x4FFF * 0x0000) = 0x0000, zvn = 000 ( +ve * 0 )
+    c{48h0000FFFF0000, 6b000010, 3b001, 12d32}, // (0x0000 * 0xFFFF) = 0x0000, zvn = 001 ( 0 * -ve )
+    c{48hFFFF00000000, 6b000010, 3b001, 12d33}, // (0xFFFF * 0x0000) = 0x0000, zvn = 001 ( -ve * 0 )
+    c{48h000100010001, 6b000010, 3b000, 12d34}, // (0x0001 * 0x0001) = 0x0001, zvn = 000 ( 1 * 1 )
+    
+    // Division Test Cases
+    c{48h000C00000004, 6b000100, 3b000, 12d35}, // (0x000C / 3) + 0x0 = est: 0x0004, zvn =  000
+    c{48h001A00000009, 6b000100, 3b000, 12d36}, // (0x001A / 3) + 0x0 = est: 0x0009, zvn =  000
+    c{48h000C0FF00FF4, 6b000100, 3b000, 12d37}, // (0x000C / 3) + 0x0FF0 = est: 0x0FF4, zvn =  000
+    
+    // Shifter Test Cases
+    c{48h000F00F00000, 6b100000, 3b000, 12d38}, // 0x000F << 0x00F0 = 0x0, zvn =  000      (Shift Left out of boundary)
+    c{48h000F000501E0, 6b100000, 3b000, 12d39}, // 0x000F << 0x0005 = 0x01E0, zvn =  000   (Shift Left within boundary)
+    c{48hF00000F00000, 6b100001, 3b001, 12d40}, // 0xF000 >> 0x00F0 = 0x0, zvn =  001      (Shift Right out of boundary)
+    c{48hF00000050780, 6b100001, 3b001, 12d41}, // 0xF000 >> 0x0005 = 0x0780, zvn =  001   (Shift Right within boundary)
+    c{48hF00000F0FFFF, 6b100011, 3b001, 12d42}, // 0xF000 >>> 0x00F0 = 0xFFFF, zvn =  001  (Shift Right Arithmetically out of boundary)
+    c{48hF0000005FF80, 6b100011, 3b001, 12d43}, // 0xF000 >>> 0x00F0 = 0xFF80, zvn =  001  (Shift Right Arithmetically within boundary)
+    
+    // Comparison Test Cases
+    
+    // a (+ve) >= b (+ve)
+    c{48h765454320000, 6b110011, 3b000, 12d44}, // (0x7654 == 0x5432) = b0, zvn =  000 
+    c{48h765454320000, 6b110101, 3b000, 12d45}, // (0x7654 < 0x5432) = b0, zvn =  000 
+    c{48h765454320000, 6b110111, 3b000, 12d46}, // (0x7654 <= 0x5432) = b0, zvn =  000 
+    c{48h765454320001, 6b111101, 3b000, 12d47}, // (0x7654 > 0x5432) = b1, zvn =  000 
+    c{48h765454320001, 6b111111, 3b000, 12d48}, // (0x7654 >= 0x5432) = b1, zvn =  000 
+    
+    // a (+ve) <= b (+ve)
+    c{48h543276540000, 6b110011, 3b001, 12d49}, // (0x5432 == 0x7654) = b0, zvn =  001  
+    c{48h543276540001, 6b110101, 3b001, 12d50}, // (0x5432 < 0x7654) = b1, zvn =  001  
+    c{48h543276540001, 6b110111, 3b001, 12d51}, // (0x5432 <= 0x7654) = b1, zvn =  001  
+    c{48h543276540000, 6b111101, 3b001, 12d52}, // (0x5432 > 0x7654) = b0, zvn =  001  
+    c{48h543276540000, 6b111111, 3b001, 12d53}, // (0x5432 >= 0x7654) = b0, zvn =  001  
+   
+    // a (-ve) >= b (-ve)
+    c{48hEDCBDCBA0000, 6b110011, 3b000, 12d54}, // (0xEDCB == 0xDCBA) = b0, zvn =  000 
+    c{48hEDCBDCBA0000, 6b110101, 3b000, 12d55}, // (0xEDCB < 0xDCBA) = b0, zvn =  000 
+    c{48hEDCBDCBA0000, 6b110111, 3b000, 12d56}, // (0xEDCB <= 0xDCBA) = b0, zvn =  000 
+    c{48hEDCBDCBA0001, 6b111101, 3b000, 12d57}, // (0xEDCB > 0xDCBA) = b1, zvn =  000 
+    c{48hEDCBDCBA0001, 6b111111, 3b000, 12d58}, // (0xEDCB >= 0xDCBA) = b1, zvn =  000
+   
+    // a (-ve) <= b (-ve)
+    c{48hDCBAEDCB0000, 6b110011, 3b001, 12d59}, // (0xDCBA == 0xEDCB) = b0, zvn =  001 
+    c{48hDCBAEDCB0001, 6b110101, 3b001, 12d60}, // (0xDCBA < 0xEDCB) = b1, zvn =  001 
+    c{48hDCBAEDCB0001, 6b110111, 3b001, 12d61}, // (0xDCBA <= 0xEDCB) = b1, zvn =  001 
+    c{48hDCBAEDCB0000, 6b111101, 3b001, 12d62}, // (0xDCBA > 0xEDCB) = b0, zvn =  001 
+    c{48hDCBAEDCB0000, 6b111111, 3b001, 12d63}, // (0xDCBA >= 0xEDCB) = b0, zvn =  001 
+    
+    // a (+ve) >= b (-ve)
+    c{48h7FFF80000000, 6b110011, 3b011, 12d64}, // (0x7FFF == 0x8000) = b0, zvn =  011 
+    c{48h7FFF80000000, 6b110101, 3b011, 12d65}, // (0x7FFF < 0x8000) = b0, zvn =  011 
+    c{48h7FFF80000000, 6b110111, 3b011, 12d66}, // (0x7FFF <= 0x8000) = b0, zvn =  011 
+    c{48h7FFF80000001, 6b111101, 3b011, 12d67}, // (0x7FFF > 0x8000) = b1, zvn =  011 
+    c{48h7FFF80000001, 6b111111, 3b011, 12d68}, // (0x7FFF >= 0x8000) = b1, zvn =  011 
+   
+    // a (-ve) <= b (+ve)
+    c{48h80007FFF0000, 6b110011, 3b010, 12d69}, // (0x8000 == 0x7FFF) = 0x0, zvn =  010 
+    c{48h80007FFF0001, 6b110101, 3b010, 12d70}, // (0x8000 < 0x7FFF) = 0x1, zvn =  010
+    c{48h80007FFF0001, 6b110111, 3b010, 12d71}, // (0x8000 <= 0x7FFF) = 0x1, zvn =  010 
+    c{48h80007FFF0000, 6b111101, 3b010, 12d72}, // (0x8000 > 0x7FFF) = 0x0, zvn =  010 
+    c{48h80007FFF0000, 6b111111, 3b010, 12d73}, // (0x8000 >= 0x7FFF) = 0x0, zvn =  010
+    
+    // 0 == 0
+    c{48h000000000001, 6b110011, 3b100, 12d74}, // (0x0 == 0x0) = 0x1, zvn =  100 
+    c{48h000000000000, 6b110101, 3b100, 12d75}, // (0x0 < 0x0) = 0x0, zvn =  100 
+    c{48h000000000001, 6b110111, 3b100, 12d76}, // (0x0 <= 0x0) = 0x1, zvn =  100 
+    c{48h000000000000, 6b111101, 3b100, 12d77}, // (0x0 > 0x0) = 0x0, zvn =  100 
+    c{48h000000000001, 6b111111, 3b100, 12d78}, // (0x0 >= 0x0) = 0x1, zvn =  100 
+    
+    // a (+ve) == b (+ve)
+    c{48h7FFF7FFF0001, 6b110011, 3b100, 12d79}, // (0x7FFF == 0x7FFF) = 0x1, zvn =  100 
+    c{48h7FFF7FFF0000, 6b110101, 3b100, 12d80}, // (0x7FFF < 0x7FFF) = 0x0, zvn =  100 
+    c{48h7FFF7FFF0001, 6b110111, 3b100, 12d81}, // (0x7FFF <= 0x7FFF) = 0x1, zvn =  100 
+    c{48h7FFF7FFF0000, 6b111101, 3b100, 12d82}, // (0x7FFF > 0x7FFF) = 0x0, zvn =  100 
+    c{48h7FFF7FFF0001, 6b111111, 3b100, 12d83}, // (0x7FFF >= 0x7FFF) = 0x1, zvn =  100
+    
+    // a (-ve) == b (-ve)
+    c{48hEDCBEDCB0001, 6b110011, 3b100, 12d84}, // (0xEDCB == 0xEDCB) = 0x1, zvn =  100 
+    c{48hEDCBEDCB0000, 6b110101, 3b100, 12d85}, // (0xEDCB < 0xEDCB) = 0x0, zvn =  100 
+    c{48hEDCBEDCB0001, 6b110111, 3b100, 12d86}, // (0xEDCB <= 0xEDCB) = 0x1, zvn =  100 
+    c{48hEDCBEDCB0000, 6b111101, 3b100, 12d87}, // (0xEDCB > 0xEDCB) = 0x0, zvn =  100 
+    c{48hEDCBEDCB0001, 6b111111, 3b100, 12d88}, // (0xEDCB >= 0xEDCB) = 0x1, zvn =  100
+    
+    // 0 >= b (-ve)
+    c{48h0000FFEF0000, 6b110011, 3b000, 12d89}, // (0x0000 == 0xFFEF) = 0x0, zvn = 000 (0 == -ve)
+    c{48h0000FFEF0000, 6b110101, 3b000, 12d90}, // (0x0000 < 0xFFEF) = 0x0, zvn = 000 (0 < -ve)
+    c{48h0000FFEF0000, 6b110111, 3b000, 12d91}, // (0x0000 <= 0xFFEF) = 0x0, zvn = 000 (0 <= -ve)
+    c{48h0000FFEF0001, 6b111101, 3b000, 12d92}, // (0x0000 > 0xFFEF) = 0x1, zvn = 000 (0 > -ve)
+    c{48h0000FFEF0001, 6b111111, 3b000, 12d93}, // (0x0000 >= 0xFFEF) = 0x1, zvn = 000 (0 >= -ve)
+    
+    // 0 <= b (+ve)
+    c{48h00007FEF0000, 6b110011, 3b001, 12d94}, // (0x0000 == 0x7FEF) = 0x0, zvn = 001 (0 == 0)
+    c{48h00007FEF0001, 6b110101, 3b001, 12d95}, // (0x0000 < 0x7FEF) = 0x1, zvn = 001 (0 < +ve)
+    c{48h00007FEF0001, 6b110111, 3b001, 12d96}, // (0x0000 <= 0x7FEF) = 0x1, zvn = 001 (0 <= +ve)
+    c{48h00007FEF0000, 6b111101, 3b001, 12d97}, // (0x0000 > 0x7FEF) = 0x0, zvn = 001 (0 > +ve)
+    c{48h00007FEF0000, 6b111111, 3b001, 12d98}, // (0x0000 >= 0x7FEF) = 0x0, zvn = 001 (0 >= +ve)    
+    
+    // a (+ve) >= 0 
+    c{48h7FEF00000000, 6b110011, 3b000, 12d99}, // (0x7FEF == 0x0000) = 0x0, zvn = 000 (+ve == 0)
+    c{48h7FEF00000000, 6b110101, 3b000, 12d100}, // (0x7FEF < 0x0000) = 0x0, zvn = 000 (+ve < 0)
+    c{48h7FEF00000000, 6b110111, 3b000, 12d101}, // (0x7FEF <= 0x0000) = 0x0, zvn = 000 (+ve <= 0)
+    c{48h7FEF00000001, 6b111101, 3b000, 12d102}, // (0x7FEF > 0x0000) = 0x1, zvn = 000 (+ve > 0)
+    c{48h7FEF00000001, 6b111111, 3b000, 12d103}, // (0x7FEF >= 0x0000) = 0x1, zvn = 000 (+ve >= 0)    
+
+    // a (-ve) <= 0 
+    c{48hFFEF00000000, 6b110011, 3b001, 12d104}, // (0xFFEF == 0x0000) = 0x0, zvn = 001 (+ve == 0)
+    c{48hFFEF00000001, 6b110101, 3b001, 12d105}, // (0xFFEF < 0x0000) = 0x1, zvn = 001 (+ve < 0)
+    c{48hFFEF00000001, 6b110111, 3b001, 12d106}, // (0xFFEF <= 0x0000) = 0x1, zvn = 001 (+ve <= 0)
+    c{48hFFEF00000000, 6b111101, 3b001, 12d107}, // (0xFFEF > 0x0000) = 0x0, zvn = 001 (+ve > 0)
+    c{48hFFEF00000000, 6b111111, 3b001, 12d108}, // (0xFFEF >= 0x0000) = 0x0, zvn = 001 (+ve >= 0) 
+                
+    // Boolean Test Cases 
+    // AND
+    c{48hBEEFFEEDBEED, 6b011000, 3b001, 12d109}, // (0xBEEF & 0xFEED) = 0xBEED, zvn =  001 
+    c{48hDEADBEEF9EAD, 6b011000, 3b001, 12d110}, // (0xDEAD & 0xBEEF) = 0x9EAD, zvn =  001 
+    c{48h00FF0FEF00EF, 6b011000, 3b000, 12d111}, // (0x00FF & 0x0FEF) = 0x00EF, zvn =  000
+    c{48hDEAD00FF00AD, 6b011000, 3b001, 12d112}, // (0xDEAD & 0x00FF) = 0x00FF, zvn =  001 (Masking)
+    c{48h000000000000, 6b011000, 3b100, 12d113}, // (0x0000 & 0x0000) = 0x0000, zvn =  100 (All zeroes)
+    c{48hFFFFFFFFFFFF, 6b011000, 3b001, 12d114}, // (0xFFFF & 0xFFFF) = 0xFFFF, zvn = 001 (All ones) 
+    
+    // OR
+    c{48hBEEFFEEDFEEF, 6b011110, 3b001, 12d115}, // (0xBEEF | 0xFEED) = 0xFEEF, zvn =  001 
+    c{48hDEADBEEFFEEF, 6b011110, 3b001, 12d116}, // (0xDEAD | 0xBEEF) = 0xFEEF, zvn =  001 
+    c{48h00FF0FEF0FFF, 6b011110, 3b000, 12d117}, // (0x00FF | 0x0FEF) = 0x0FFF, zvn =  000 
+    c{48h000000000000, 6b011110, 3b100, 12d118}, // (0x0000 | 0x0000) = 0x0000, zvn =  100 (All Zeroes)
+    c{48hFFFFFFFFFFFF, 6b011110, 3b001, 12d119}, // (0xFFFF | 0xFFFF) = 0xFFFF, zvn =  001 (All Ones)   
+    
+    // XOR
+    c{48hBEEFFEED4002, 6b010110, 3b001, 12d120}, // (0xBEEF ^ 0xFEED) = 0x4002, zvn =  001 
+    c{48hDEADBEEF6042, 6b010110, 3b001, 12d121}, // (0xDEAD ^ 0xBEEF) = 0x6042, zvn =  001 
+    c{48hDEAD3EEDE040, 6b010110, 3b000, 12d122}, // (0xDEAD ^ 0x3EED) = 0xE040, zvn =  000 
+    c{48h000000000000, 6b010110, 3b100, 12d123}, // (0x0000 ^ 0x0000) = 0x0000, zvn =  100 (All Zeroes)
+    c{48hFFFFFFFF0000, 6b010110, 3b001, 12d124}, // (0xFFFF ^ 0xFFFF) = 0x0000, zvn =  001 (All Ones)
+    
+    // LDR(A)
+    c{48hDEADBEEDDEAD, 6b011010, 3b001, 12d125}, // LDR(A), zvn =  001 
+    c{48h3EADBEED3EAD, 6b011010, 3b001, 12d126}, // LDR(A), zvn =  001  (random value)
+    c{48h000000000000, 6b011010, 3b100, 12d127}, // LDR(A), zvn =  100  (All zeroes)
+    c{48hFFFFFFFFFFFF, 6b011010, 3b001, 12d128}, // LDR(A), zvn =  001  (All ones)
+    c{48hFEFF0000FEFF, 6b011010, 3b001, 12d129}, // LDR(A), zvn =  001 (zero B)
+    c{48h0000FFEF0000, 6b011010, 3b001, 12d130}  // LDR(A), zvn =  001 (Zero A, non-zero B)
+  };
+  const MAXIMUM_TEST = 130;
+  always {
+    // To connect slow slowClock 
+    slowClockEdge.in = slowClock.value[SLOWCLOCK_SIZE - 1];
+    
+    // ALU Connections
+    alu_a = TEST_CASES[current_state.q][68:53];          // Take the current test <alu a> input  
+    alu_b = TEST_CASES[current_state.q][52:37];          // Take the current test <alu b> input
+    correctOutput = TEST_CASES[current_state.q][36:21];  // Output the current test <correct output>
+    alufn = TEST_CASES[current_state.q][20:15];          // Take the current test <alufn code> output
+    correctZVN = TEST_CASES[current_state.q][14:12];      // Output the current test <correct zvn>
+    currentState = TEST_CASES[current_state.q][11:0];     // Output the current test (state) ID/label
+    
+    // Set default tester connections
+    success_signal = b0;
+    error_mode_signal = b0;
+    correct_output_signal = b0;
+    out = b0;
+    aluoutzvn = c{alu_out[0], alu_out[1], alu_out[2]};
+    
+    // If new test (from pressing test button), start from beginning of test
+    if (new_test == b1){
+      test_state.d = test_state.DOTEST;
+      current_state.d = MAXIMUM_TEST - 1; 
+    }
+    
+    // If debug mode is on
+      if (slowClockEdge.out == b1){
+        case(test_state.q) {
+          test_state.DOTEST: 
+                if (alu_out[18:3] == correctOutput && aluoutzvn == correctZVN) {
+                  if (current_state.q == b0){  // Last case is correct
+                      test_state.d = test_state.SUCCESS;
+                  }   
+                  else {
+                    current_state.d = current_state.q - 1;
+                  }
+              }
+              // if incorrect move to error state
+              else {
+                 test_state.d = test_state.ERROR;
+              }
+             
+      }
+      
+    }
+       case(test_state.q) {
+         test_state.DOTEST: 
+            out = c{8h00, currentState, 3b111};
+          test_state.ERROR:
+              error_mode_signal = d1;  // light up led to indicate error
+            
+              // toggle between error states when next error state button pressed
+              if (next_error_state == b1) {
+                  case(error_states.q) {
+                    error_states.ID: error_states.d = error_states.ALUFN;
+                    error_states.ALUFN: error_states.d = error_states.CORRECT; 
+                    error_states.CORRECT: error_states.d = error_states.ID;
+                    }
+                  }
+              
+              case(error_states.q) {
+                error_states.ID:
+                      out = c{8h00, currentState, 3b111};    // Displays current state ID / Which test case
+                error_states.ALUFN:
+                      out = c{alu_out[18:3], aluoutzvn};     // Displays ALU output  (zvn from ALU is from [0] to [2] so flip it.  
+                error_states.CORRECT:
+                      out = c{correctOutput, correctZVN};    // Displays correct output
+                      correct_output_signal = b1;            // Light up io_led to indicate in correct output
+               }
+           test_state.SUCCESS:
+                  out = c{16d8888, 3b111};
+                  success_signal = b1;        
+    
+    }  
+}
